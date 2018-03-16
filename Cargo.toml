@@ -1,0 +1,6 @@
+[package]
+name = "desim"
+version = "0.1.0"
+authors = ["Gianmarco Garrisi <gianmarcogarrisi@tutanota.com>"]
+
+[dependencies]

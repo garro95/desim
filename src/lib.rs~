@@ -1,0 +1,64 @@
+//! This crate implement a discrete event simulation framework
+//! inspired by the SimPy library for Python. It uses the generator
+//! feature that is nightly
+
+#![feature(generators, generator_trait)]
+use std::ops::{Generator, GeneratorState};
+use std::collections::BinaryHeap;
+
+pub enum Effect {
+    TimeOut(f64),
+    Event(Event),
+    
+}
+
+pub struct Simulation {
+    processes: Vec<Box<Generator<Yield = Effect, Return = ()>>>,
+    events: BinaryHeap<Event>,
+}
+
+pub struct ParallelSimulation {
+    processes: Vec<Box<Generator<Yield = Effect, Return = ()>>>
+}
+
+pub struct Resource {
+
+}
+
+pub struct Event {
+    time: f64
+}
+
+pub enum EndCondition {
+    Time(f64),
+}
+
+impl Simulation {
+    /// Proceed in the simulation by 1 step
+    pub fn step(&mut self) {
+        
+    }
+
+    /// Run the simulation until and ending condition is met.
+    pub fn run(self, ending_condition: EndCondition) {
+        
+    }
+
+    pub fn nonblocking_run(self) {
+        
+    }
+
+    /// Return `true` if the ending condition was met, `false` otherwise.
+    fn check_ending_condition(&self, ending_condition: EndCondition) -> bool {
+        
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+}
