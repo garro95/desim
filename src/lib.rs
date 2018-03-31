@@ -76,6 +76,7 @@ use std::cmp::Ordering;
 
 /// The effect is yelded by a process generator to
 /// interact with the simulation environment.
+#[derive(Copy, Clone)]
 pub enum Effect {
     /// The process that yields this effect will be resumed
     /// after the speified time
@@ -87,7 +88,7 @@ pub enum Effect {
     /// This effect is yielded to release a resource that is not needed anymore.
     Release(ResourceId),
     /// Keep the process' state until it is resumed by another event.
-    Wait
+    Wait,
 }
 
 /// Identifies a process. Can be used to resume it from another one.
@@ -95,11 +96,10 @@ pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
 
-
 struct Resource {
     allocated: usize,
     available: usize,
-    queue: VecDeque<ProcessId>
+    queue: VecDeque<ProcessId>,
 }
 
 /// This struct provides the methods to create and run the simulation
@@ -107,12 +107,15 @@ struct Resource {
 ///
 /// It provides methods to create processes and finite resources that
 /// must be shared among them.
+///
+/// See the crate-level documentation for more information about how the
+/// simulation framework works
 pub struct Simulation {
     time: f64,
     processes: Vec<Box<Generator<Yield = Effect, Return = ()>>>,
     future_events: BinaryHeap<Event>,
     processed_events: Vec<Event>,
-    resources: Vec<Resource>
+    resources: Vec<Resource>,
 }
 
 /*
@@ -135,12 +138,10 @@ pub enum EndCondition {
 }
 
 impl Simulation {
-    pub fn new(){
-
-    }
+    pub fn new() {}
 
     /// Returns the current simulation time
-    pub fn time(&self) -> f64{
+    pub fn time(&self) -> f64 {
         self.time
     }
 
@@ -155,10 +156,10 @@ impl Simulation {
     /// of a finite resource.
     ///
     /// Returns the identifier of the process.
-    pub fn create_process(&mut self,
-                          process: Box<Generator<Yield = Effect, Return = () >>)
-                          -> ProcessId
-    {
+    pub fn create_process(
+        &mut self,
+        process: Box<Generator<Yield = Effect, Return = ()>>,
+    ) -> ProcessId {
         let id = self.processes.len();
         self.processes.push(process);
         id
@@ -178,10 +179,10 @@ impl Simulation {
     /// Returns the identifier of the resource
     pub fn create_resource(&mut self, n: usize) -> ResourceId {
         let id = self.resources.len();
-        self.resources.push(Resource{
+        self.resources.push(Resource {
             allocated: n,
             available: n,
-            queue: VecDeque::new()
+            queue: VecDeque::new(),
         });
         id
     }
@@ -196,12 +197,12 @@ impl Simulation {
     pub fn step(&mut self) {
         match self.future_events.pop() {
             Some(event) => {
-                match self.processes[event.process].resume() {
+                match unsafe { self.processes[event.process].resume() } {
                     GeneratorState::Yielded(y) => match y {
-                        Effect::TimeOut(t) =>
-                            self.future_events.push(Event{
-                                time: self.time + t,
-                                process: event.process}),
+                        Effect::TimeOut(t) => self.future_events.push(Event {
+                            time: self.time + t,
+                            process: event.process,
+                        }),
                         Effect::Event(e) => self.future_events.push(e),
                         Effect::Request(r) => {
                             let mut res = &mut self.resources[r];
@@ -210,9 +211,9 @@ impl Simulation {
                                 res.queue.push_back(event.process);
                             } else {
                                 // the process can use the resource immediately
-                                self.future_events.push(Event{
+                                self.future_events.push(Event {
                                     time: self.time,
-                                    process: event.process
+                                    process: event.process,
                                 });
                                 res.available -= 1;
                             }
@@ -233,9 +234,9 @@ impl Simulation {
                             }
                             // after releasing the resource the process
                             // can be resumed
-                            self.future_events.push(Event{
+                            self.future_events.push(Event {
                                 time: self.time,
-                                process: event.process
+                                process: event.process,
                             })
                         }
                         Effect::Wait => {}
@@ -245,11 +246,11 @@ impl Simulation {
                         // all existing `ProcessId`s, but keeping it would be a
                         // waste of space since it is completed.
                         // May be worth to use another data structure
-                    },
+                    }
                 }
                 self.processed_events.push(event);
             }
-            None => {},
+            None => {}
         }
     }
 
@@ -268,15 +269,19 @@ impl Simulation {
 
     /// Return `true` if the ending condition was met, `false` otherwise.
     fn check_ending_condition(&self, ending_condition: &EndCondition) -> bool {
-        match ending_condition {
-            &EndCondition:: Time(t) => if self.time >= t { true } else {false}
+        match &ending_condition {
+            EndCondition::Time(t) => if self.time >= *t {
+                true
+            } else {
+                false
+            },
         }
     }
 }
 
 impl Default for Simulation {
     fn default() -> Self {
-        Simulation{
+        Simulation {
             time: 0.0,
             processes: Vec::default(),
             future_events: BinaryHeap::default(),
@@ -295,7 +300,7 @@ impl PartialEq for Event {
 impl Eq for Event {}
 
 impl PartialOrd for Event {
-    fn partial_cmp(&self, other:&Event) -> Option<Ordering> {
+    fn partial_cmp(&self, other: &Event) -> Option<Ordering> {
         self.time.partial_cmp(&other.time)
     }
 }
@@ -304,7 +309,7 @@ impl Ord for Event {
     fn cmp(&self, other: &Event) -> Ordering {
         match self.time.partial_cmp(&other.time) {
             Some(o) => o,
-            None => panic!("Event time was uncomparable. Maybe a NaN")
+            None => panic!("Event time was uncomparable. Maybe a NaN"),
         }
     }
 }
