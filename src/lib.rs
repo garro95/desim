@@ -72,11 +72,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 #![feature(generators, generator_trait)]
 use std::ops::{Generator, GeneratorState};
 use std::collections::{BinaryHeap, VecDeque};
-use std::cmp::Ordering;
+use std::cmp::{Ordering, Reverse};
 
 /// The effect is yelded by a process generator to
 /// interact with the simulation environment.
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum Effect {
     /// The process that yields this effect will be resumed
     /// after the speified time
@@ -96,6 +96,7 @@ pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
 
+#[derive(Debug)]
 struct Resource {
     allocated: usize,
     available: usize,
@@ -113,7 +114,7 @@ struct Resource {
 pub struct Simulation {
     time: f64,
     processes: Vec<Box<Generator<Yield = Effect, Return = ()>>>,
-    future_events: BinaryHeap<Event>,
+    future_events: BinaryHeap<Reverse<Event>>,
     processed_events: Vec<Event>,
     resources: Vec<Resource>,
 }
@@ -126,7 +127,7 @@ pub struct ParallelSimulation {
 
 /// An event that can be scheduled by a process, yelding the `Event` `Effect`
 /// or by the owner of a `Simulation` through the `schedule` method
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Event {
     pub time: f64,
     pub process: ProcessId,
@@ -135,10 +136,13 @@ pub struct Event {
 /// Specify which condition must be met for the simulation to stop.
 pub enum EndCondition {
     Time(f64),
+    NoEvents,
 }
 
 impl Simulation {
-    pub fn new() {}
+    pub fn new() -> Simulation {
+        Simulation::default()
+    }
 
     /// Returns the current simulation time
     pub fn time(&self) -> f64 {
@@ -190,20 +194,21 @@ impl Simulation {
     /// Schedule a process to be executed. Another way to schedule events is
     /// yielding `Effect::Event` from a process during the simulation.
     pub fn schedule_event(&mut self, event: Event) {
-        self.future_events.push(event);
+        self.future_events.push(Reverse(event));
     }
 
     /// Proceed in the simulation by 1 step
     pub fn step(&mut self) {
         match self.future_events.pop() {
-            Some(event) => {
+            Some(Reverse(event)) => {
+                self.time = event.time;
                 match unsafe { self.processes[event.process].resume() } {
                     GeneratorState::Yielded(y) => match y {
-                        Effect::TimeOut(t) => self.future_events.push(Event {
+                        Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                             time: self.time + t,
                             process: event.process,
-                        }),
-                        Effect::Event(e) => self.future_events.push(e),
+                        })),
+                        Effect::Event(e) => self.future_events.push(Reverse(e)),
                         Effect::Request(r) => {
                             let mut res = &mut self.resources[r];
                             if res.available == 0 {
@@ -211,10 +216,10 @@ impl Simulation {
                                 res.queue.push_back(event.process);
                             } else {
                                 // the process can use the resource immediately
-                                self.future_events.push(Event {
+                                self.future_events.push(Reverse(Event {
                                     time: self.time,
                                     process: event.process,
-                                });
+                                }));
                                 res.available -= 1;
                             }
                         }
@@ -223,10 +228,10 @@ impl Simulation {
                             match res.queue.pop_front() {
                                 Some(p) =>
                                 // some processes in queue: schedule the next.
-                                    self.future_events.push(Event{
+                                    self.future_events.push(Reverse(Event{
                                         time: self.time,
                                         process: p
-                                    }),
+                                    })),
                                 None => {
                                     assert!(res.available < res.allocated);
                                     res.available += 1;
@@ -234,10 +239,10 @@ impl Simulation {
                             }
                             // after releasing the resource the process
                             // can be resumed
-                            self.future_events.push(Event {
+                            self.future_events.push(Reverse(Event {
                                 time: self.time,
                                 process: event.process,
-                            })
+                            }))
                         }
                         Effect::Wait => {}
                     },
@@ -256,7 +261,7 @@ impl Simulation {
 
     /// Run the simulation until and ending condition is met.
     pub fn run(mut self, until: EndCondition) -> Simulation {
-        while self.check_ending_condition(&until) {
+        while !self.check_ending_condition(&until) {
             self.step();
         }
         self
@@ -271,11 +276,13 @@ impl Simulation {
     fn check_ending_condition(&self, ending_condition: &EndCondition) -> bool {
         match &ending_condition {
             EndCondition::Time(t) => if self.time >= *t {
-                true
-            } else {
-                false
+                return true
             },
+            EndCondition::NoEvents => if self.future_events.len() == 0 {
+                return true
+            }
         }
+        false
     }
 }
 
@@ -318,6 +325,82 @@ impl Ord for Event {
 mod tests {
     #[test]
     fn it_works() {
-        assert_eq!(2 + 2, 4);
+        use Simulation;
+        use Effect;
+        use Event;
+
+        let mut s = Simulation::new();
+        let p = s.create_process(Box::new(|| {
+            let mut a = 0.0;
+            loop {
+                a += 1.0;
+                
+                yield Effect::TimeOut(a);
+            }
+        }));
+        s.schedule_event(Event{time: 0.0, process: p});
+        s.step();
+        s.step();
+        assert_eq!(s.time(), 1.0);
+        s.step();
+        assert_eq!(s.time(), 3.0);
+        s.step();
+        assert_eq!(s.time(), 6.0);
+    }
+
+    #[test]
+    fn run() {
+        use Simulation;
+        use Effect;
+        use Event;
+        use EndCondition;
+
+        let mut s = Simulation::new();
+        let p = s.create_process( Box::new(|| {
+            let tik = 0.7;
+            loop{
+                println!("tik");
+                yield Effect::TimeOut(tik);
+            }
+        }));
+        s.schedule_event(Event{time: 0.0, process: p});
+        let s = s.run(EndCondition::Time(10.0));
+        println!("{}", s.time());
+        assert!(s.time() >= 10.0);
+    }
+
+    #[test]
+    fn resource() {
+        use Simulation;
+        use Effect;
+        use Event;
+        use EndCondition::NoEvents;
+
+        let mut s = Simulation::new();
+        let r = s.create_resource(1);
+
+        // simple process that lock the resource for 7 time units
+        let p1 = s.create_process(Box::new(move || {
+            yield Effect::Request(r);
+            yield Effect::TimeOut(7.0);
+            yield Effect::Release(r);
+        }));
+        // simple process that holds the resource for 3 time units
+        let p2 = s.create_process(Box::new(move || {
+            yield Effect::Request(r);
+            yield Effect::TimeOut(3.0);
+            yield Effect::Release(r);
+        }));
+
+        // let p1 start immediately...
+        s.schedule_event(Event{time: 0.0, process: p1});
+        // let p2 start after 2 t.u., when r is not available
+        s.schedule_event(Event{time: 2.0, process: p2});
+        // p2 will wait r to be free (time 7.0) and its timeout
+        // of 3.0 t.u. The simulation will end at time 10.0
+        
+        let s = s.run(NoEvents);
+        println!("{:?}", s.processed_events());
+        assert_eq!(s.time(), 10.0);
     }
 }

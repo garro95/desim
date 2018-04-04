@@ -7,6 +7,9 @@ repository = "https://github.com/garro95/desim"
 readme = "README.md"
 keywords =  ["simulation", "generators", "framework", "time", "discrete", "events"]
 categories = ["simulation", "science"]
-licence = "GPL-3.0-or-later"
+license = "GPL-3.0-or-later"
 
 [dependencies]
+
+[dev-dependencies]
+rand = "0.4"
