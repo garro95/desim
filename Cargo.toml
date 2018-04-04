@@ -2,10 +2,10 @@
 name = "desim"
 version = "0.1.0"
 authors = ["Gianmarco Garrisi <gianmarcogarrisi@tutanota.com>"]
-description = "A discrete events simulation framework"
+description = "A discrete-time events simulation framework inspired by Simpy"
 repository = "https://github.com/garro95/desim"
 readme = "README.md"
-keywords =  ["simulation", "generators", "framework", "time", "discrete", "events"]
+keywords =  ["simulation", "framework", "time", "discrete", "events"]
 categories = ["simulation", "science"]
 license = "GPL-3.0-or-later"
 
