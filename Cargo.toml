@@ -7,7 +7,7 @@ repository = "https://github.com/garro95/desim"
 readme = "README.md"
 keywords =  ["simulation", "framework", "time", "discrete", "events"]
 categories = ["simulation", "science"]
-license = "GPL-3.0-or-later"
+license = "GPL-3.0"
 
 [dependencies]
 
