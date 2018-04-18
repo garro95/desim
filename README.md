@@ -8,11 +8,11 @@ It is inspired by the Simpy environment for Python,
 but with the aim of being more efficient and to provide also a concurrent
 implementation.
 To achieve the same ease of use remaining light and efficient, it is based on
-the experimental __generators__ (coroutine) rust feature.
+the experimental _generators_ (coroutine) rust feature.
 
 You can read the [API documentation here](docs.rs/desim)
 
-**This project is blocked waiting for some features related to __generators__.
+**This project is blocked waiting for some features related to _generators_.
 In particular the possibility to resume the generator with arguments.
 The implementation of the Clone trait for generators, such that one can clone
 the instructions of the generator without copying the current state, would
