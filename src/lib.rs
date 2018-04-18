@@ -52,7 +52,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! The process may also return. In that case it can not be resumed anymore.
 //!
 //!
-//! # Resources
+//! # Resource
 //! A resource is a finite amount of entities that can be used by one process
 //! a time. When all the instances of the resource of interest are being used by
 //! a process, the requiring one is enqueued in a FIFO and is resumed when the
@@ -73,6 +73,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 use std::ops::{Generator, GeneratorState};
 use std::collections::{BinaryHeap, VecDeque};
 use std::cmp::{Ordering, Reverse};
+use std::thread;
 
 /// The effect is yelded by a process generator to
 /// interact with the simulation environment.
@@ -91,7 +92,7 @@ pub enum Effect {
     Wait,
 }
 
-/// Identifies a process. Can be used to resume it from another one.
+/// Identifies a process. Can be used to resume it from another one and to schedule it.
 pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
@@ -113,7 +114,7 @@ struct Resource {
 /// simulation framework works
 pub struct Simulation {
     time: f64,
-    processes: Vec<Box<Generator<Yield = Effect, Return = ()>>>,
+    processes: Vec<Option<Box<Generator<Yield = Effect, Return = ()>>>>,
     future_events: BinaryHeap<Reverse<Event>>,
     processed_events: Vec<Event>,
     resources: Vec<Resource>,
@@ -129,17 +130,24 @@ pub struct ParallelSimulation {
 /// or by the owner of a `Simulation` through the `schedule` method
 #[derive(Debug, Copy, Clone)]
 pub struct Event {
+    /// Time interval between the current simulation time and the event schedule
     pub time: f64,
+    /// Process to execute when the event occur
     pub process: ProcessId,
 }
 
 /// Specify which condition must be met for the simulation to stop.
 pub enum EndCondition {
+    /// Run the simulation until a certain point in time is reached.
     Time(f64),
+    /// Run the simulation until there are no more events scheduled.
     NoEvents,
+    /// Execute exactly N steps of the simulation.
+    NSteps(usize),
 }
 
 impl Simulation {
+    /// Create a new `Simulation` environment.
     pub fn new() -> Simulation {
         Simulation::default()
     }
@@ -154,10 +162,9 @@ impl Simulation {
         self.processed_events.as_slice()
     }
 
-    /// Create a process. That is a generator that can Yield `Effect`s.
-    /// An effect may be a new `Event` to schedule, a `Timeout` after which the
-    /// same process should be executed, or a `Request` to hold an instance
-    /// of a finite resource.
+    /// Create a process.
+    ///
+    /// For more information about a process, see the crate level documentation
     ///
     /// Returns the identifier of the process.
     pub fn create_process(
@@ -165,20 +172,13 @@ impl Simulation {
         process: Box<Generator<Yield = Effect, Return = ()>>,
     ) -> ProcessId {
         let id = self.processes.len();
-        self.processes.push(process);
+        self.processes.push(Some(process));
         id
     }
 
     /// Create a new finite resource, of which n instancies are available.
     ///
-    /// The resource can be requested by a process yielding a `Request`.
-    /// If the requested resource is not available at that time, the process
-    /// is enqueued until one instance of the resource is freed.
-    ///
-    /// When the process has done with the resource, it has to yield `Release`,
-    /// so that other processes can use that.
-    ///
-    /// The queue has a FIFO (first in first out) policy.
+    /// For more information about a resource, see the crate level documentation
     ///
     /// Returns the identifier of the resource
     pub fn create_resource(&mut self, n: usize) -> ResourceId {
@@ -202,13 +202,16 @@ impl Simulation {
         match self.future_events.pop() {
             Some(Reverse(event)) => {
                 self.time = event.time;
-                match unsafe { self.processes[event.process].resume() } {
+                match unsafe { self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.").resume() } {
                     GeneratorState::Yielded(y) => match y {
                         Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                             time: self.time + t,
                             process: event.process,
                         })),
-                        Effect::Event(e) => self.future_events.push(Reverse(e)),
+                        Effect::Event(mut e) =>{
+                            e.time += self.time;
+                            self.future_events.push(Reverse(e))
+                        },
                         Effect::Request(r) => {
                             let mut res = &mut self.resources[r];
                             if res.available == 0 {
@@ -247,10 +250,12 @@ impl Simulation {
                         Effect::Wait => {}
                     },
                     GeneratorState::Complete(_) => {
-                        // removing the process from the vector would invalidate
+                        // FIXME: removing the process from the vector would invalidate
                         // all existing `ProcessId`s, but keeping it would be a
                         // waste of space since it is completed.
-                        // May be worth to use another data structure
+                        // May be worth to use another data structure.
+                        // At least let's remove the generator itself.
+                        self.processes[event.process].take();
                     }
                 }
                 self.processed_events.push(event);
@@ -266,11 +271,13 @@ impl Simulation {
         }
         self
     }
-    /*
-    pub fn nonblocking_run(mut self, until: EndCondition) {
-
+/*
+    pub fn nonblocking_run(mut self, until: EndCondition) -> thread::JoinHandle<Simulation> {
+        thread::spawn(move || {
+            self.run(until)
+        })
     }
-     */
+*/
 
     /// Return `true` if the ending condition was met, `false` otherwise.
     fn check_ending_condition(&self, ending_condition: &EndCondition) -> bool {
@@ -280,7 +287,11 @@ impl Simulation {
             },
             EndCondition::NoEvents => if self.future_events.len() == 0 {
                 return true
-            }
+            },
+            // FIXME: what if client call `run(EndCondition::NSteps(n)` after having called `step()` for some times?
+            EndCondition::NSteps(n) => if self.processed_events.len() == n {
+                return true
+            },
         }
         false
     }
