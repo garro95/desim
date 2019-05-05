@@ -74,6 +74,7 @@ use std::ops::{Generator, GeneratorState};
 use std::collections::{BinaryHeap, VecDeque};
 use std::cmp::{Ordering, Reverse};
 use std::thread;
+use std::pin::Pin;
 
 /// The effect is yelded by a process generator to
 /// interact with the simulation environment.
@@ -114,7 +115,7 @@ struct Resource {
 /// simulation framework works
 pub struct Simulation {
     time: f64,
-    processes: Vec<Option<Box<Generator<Yield = Effect, Return = ()>>>>,
+    processes: Vec<Option<Box<dyn Generator<Yield = Effect, Return = ()> + Unpin>>>,
     future_events: BinaryHeap<Reverse<Event>>,
     processed_events: Vec<Event>,
     resources: Vec<Resource>,
@@ -169,7 +170,7 @@ impl Simulation {
     /// Returns the identifier of the process.
     pub fn create_process(
         &mut self,
-        process: Box<Generator<Yield = Effect, Return = ()>>,
+        process: Box<dyn Generator<Yield = Effect, Return = ()> + Unpin>,
     ) -> ProcessId {
         let id = self.processes.len();
         self.processes.push(Some(process));
@@ -202,7 +203,7 @@ impl Simulation {
         match self.future_events.pop() {
             Some(Reverse(event)) => {
                 self.time = event.time;
-                match unsafe { self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.").resume() } {
+                match Pin::new(self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.")).resume() {
                     GeneratorState::Yielded(y) => match y {
                         Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                             time: self.time + t,
@@ -289,7 +290,7 @@ impl Simulation {
                 return true
             },
             // FIXME: what if client call `run(EndCondition::NSteps(n)` after having called `step()` for some times?
-            EndCondition::NSteps(n) => if self.processed_events.len() == n {
+            EndCondition::NSteps(n) => if self.processed_events.len() == *n {
                 return true
             },
         }
