@@ -73,7 +73,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 use std::ops::{Generator, GeneratorState};
 use std::collections::{BinaryHeap, VecDeque};
 use std::cmp::{Ordering, Reverse};
-use std::thread;
 use std::pin::Pin;
 
 /// The effect is yelded by a process generator to
@@ -346,7 +345,7 @@ mod tests {
             let mut a = 0.0;
             loop {
                 a += 1.0;
-                
+
                 yield Effect::TimeOut(a);
             }
         }));
@@ -410,7 +409,7 @@ mod tests {
         s.schedule_event(Event{time: 2.0, process: p2});
         // p2 will wait r to be free (time 7.0) and its timeout
         // of 3.0 t.u. The simulation will end at time 10.0
-        
+
         let s = s.run(NoEvents);
         println!("{:?}", s.processed_events());
         assert_eq!(s.time(), 10.0);
