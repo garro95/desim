@@ -14,7 +14,7 @@ fn main(){
         for _ in 0..10 {
             // wait for the cpu to be available
             yield Effect::Request(cpu);
-            // do some job that requres a fixed amount of 5 time units
+            // do some job that requires a fixed amount of 5 time units
             yield Effect::TimeOut(5.0);
             // release the CPU
             yield Effect::Release(cpu);
