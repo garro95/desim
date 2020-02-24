@@ -202,7 +202,7 @@ impl Simulation {
         match self.future_events.pop() {
             Some(Reverse(event)) => {
                 self.time = event.time;
-                match Pin::new(self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.")).resume() {
+                match Pin::new(self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.")).resume(()) {
                     GeneratorState::Yielded(y) => match y {
                         Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                             time: self.time + t,
