@@ -75,6 +75,61 @@ use std::collections::{BinaryHeap, VecDeque};
 use std::cmp::{Ordering, Reverse};
 use std::pin::Pin;
 
+/// Data structures implementing this trait can be yielded from the generator
+/// associated with a `Process`. This allows attaching application-specific data
+/// to `Effect`s. This data is then carried arround by the Simulation, passed
+/// into user callbacks for context or simply logged for later.
+///
+/// As a simple example, implementing SimState for a type (as shown for
+/// ItemState below) allows users to track item stages.
+///
+/// A process can then yield `ItemState` instead of `Effect` types:
+///
+/// ```
+/// #![feature (generators, generator_trait)]
+/// use desim::{Effect, SimState, Simulation};
+///
+/// // enum used as part of state logged during simulation
+/// #[derive(Clone)]
+/// enum StageType {
+///     FirstPass,
+///     SecondPass,
+/// }
+///
+/// // structure yielded from processes of the simulation
+/// #[derive(Clone)]
+/// struct ItemState {
+///     stage: StageType,
+///     effect: Effect,
+///     log: bool,
+/// }
+///
+/// impl SimState for ItemState {
+///     fn get_effect(&self) -> Effect { self.effect }
+///     fn set_effect(&mut self, e: Effect) { self.effect = e; }
+///     fn should_log(&self) -> bool { self.log }
+/// }
+///
+/// let mut sim = Simulation::new();
+/// sim.create_process(Box::new(move || {
+///     yield ItemState { stage: StageType::FirstPass,
+///                       effect: Effect::TimeOut(10.0),
+///                       log: true,
+///                     };
+/// }));
+/// ```
+///
+/// Calling `sim.processed_steps()` then returns a vector of (Event, ItemState)
+/// pairs, one for each yielded value where should_log() returned true.
+///
+/// For a full example, see examples/monitoring-state.rs
+///
+pub trait SimState {
+    fn get_effect(&self) -> Effect;
+    fn set_effect(&mut self, Effect);
+    fn should_log(&self) -> bool;
+}
+
 /// The effect is yelded by a process generator to
 /// interact with the simulation environment.
 #[derive(Debug, Copy, Clone)]
@@ -90,12 +145,15 @@ pub enum Effect {
     Release(ResourceId),
     /// Keep the process' state until it is resumed by another event.
     Wait,
+    Trace,
 }
 
 /// Identifies a process. Can be used to resume it from another one and to schedule it.
 pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
+/// The type of each `Process` generator
+pub type SimGen<T> = dyn Generator<Yield = T, Return = ()> + Unpin;
 
 #[derive(Debug)]
 struct Resource {
@@ -112,11 +170,12 @@ struct Resource {
 ///
 /// See the crate-level documentation for more information about how the
 /// simulation framework works
-pub struct Simulation {
+pub struct Simulation<T: SimState + Clone> {
     time: f64,
-    processes: Vec<Option<Box<dyn Generator<Yield = Effect, Return = ()> + Unpin>>>,
+    steps: usize,
+    processes: Vec<Option<Box<SimGen<T>>>>,
     future_events: BinaryHeap<Reverse<Event>>,
-    processed_events: Vec<Event>,
+    processed_events: Vec<(Event, T)>,
     resources: Vec<Resource>,
 }
 
@@ -146,10 +205,10 @@ pub enum EndCondition {
     NSteps(usize),
 }
 
-impl Simulation {
+impl<T: SimState + Clone> Simulation<T> {
     /// Create a new `Simulation` environment.
-    pub fn new() -> Simulation {
-        Simulation::default()
+    pub fn new() -> Simulation<T> {
+        Simulation::<T>::default()
     }
 
     /// Returns the current simulation time
@@ -158,7 +217,7 @@ impl Simulation {
     }
 
     /// Returns the log of processed events
-    pub fn processed_events(&self) -> &[Event] {
+    pub fn processed_events(&self) -> &[(Event, T)] {
         self.processed_events.as_slice()
     }
 
@@ -169,7 +228,7 @@ impl Simulation {
     /// Returns the identifier of the process.
     pub fn create_process(
         &mut self,
-        process: Box<dyn Generator<Yield = Effect, Return = ()> + Unpin>,
+        process: Box<dyn Generator<Yield = T, Return = ()> + Unpin>,
     ) -> ProcessId {
         let id = self.processes.len();
         self.processes.push(Some(process));
@@ -197,13 +256,36 @@ impl Simulation {
         self.future_events.push(Reverse(event));
     }
 
+    fn log_processed_event(&mut self, event: &Event, sim_state: T) {
+        if sim_state.should_log() {
+            self.processed_events.push((*event, sim_state));
+        }
+    }
+
     /// Proceed in the simulation by 1 step
     pub fn step(&mut self) {
+        self.steps += 1;
         match self.future_events.pop() {
             Some(Reverse(event)) => {
                 self.time = event.time;
-                match Pin::new(self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.")).resume(()) {
-                    GeneratorState::Yielded(y) => match y {
+                let gstatepin = Pin::new(self.processes[event.process]
+                                             .as_mut()
+                                             .expect("ERROR. Tried to resume a completed process.")
+                                        ).resume(());
+                // log event
+                // logging needs to happen before the processing because processing
+                // can add further events (such as resource acquired/released) and
+                // it becomes confusing if you first get a resource acquired event
+                // and only log the request for it afterwards.
+                match gstatepin.clone() {
+                    GeneratorState::Yielded(y) => {
+                        self.log_processed_event(&event, y);
+                    }
+                    GeneratorState::Complete(_) => {}
+                }
+                // process event
+                match gstatepin {
+                    GeneratorState::Yielded(y) => match y.get_effect() {
                         Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                             time: self.time + t,
                             process: event.process,
@@ -248,6 +330,14 @@ impl Simulation {
                             }))
                         }
                         Effect::Wait => {}
+                        Effect::Trace => {
+                            // this event is only for tracing, reschedule
+                            // immediately
+                            self.future_events.push(Reverse(Event {
+                                time: self.time,
+                                process: event.process,
+                            }))
+                        }
                     },
                     GeneratorState::Complete(_) => {
                         // FIXME: removing the process from the vector would invalidate
@@ -258,14 +348,13 @@ impl Simulation {
                         self.processes[event.process].take();
                     }
                 }
-                self.processed_events.push(event);
             }
             None => {}
         }
     }
 
     /// Run the simulation until and ending condition is met.
-    pub fn run(mut self, until: EndCondition) -> Simulation {
+    pub fn run(mut self, until: EndCondition) -> Simulation<T> {
         while !self.check_ending_condition(&until) {
             self.step();
         }
@@ -288,8 +377,7 @@ impl Simulation {
             EndCondition::NoEvents => if self.future_events.len() == 0 {
                 return true
             },
-            // FIXME: what if client call `run(EndCondition::NSteps(n)` after having called `step()` for some times?
-            EndCondition::NSteps(n) => if self.processed_events.len() == *n {
+            EndCondition::NSteps(n) => if self.steps == *n {
                 return true
             },
         }
@@ -297,10 +385,11 @@ impl Simulation {
     }
 }
 
-impl Default for Simulation {
+impl<T: SimState + Clone> Default for Simulation<T> {
     fn default() -> Self {
-        Simulation {
+        Simulation::<T> {
             time: 0.0,
+            steps: 0,
             processes: Vec::default(),
             future_events: BinaryHeap::default(),
             processed_events: Vec::default(),
@@ -330,6 +419,12 @@ impl Ord for Event {
             None => panic!("Event time was uncomparable. Maybe a NaN"),
         }
     }
+}
+
+impl SimState for Effect {
+    fn get_effect(&self) -> Effect { *self }
+    fn set_effect(&mut self, e: Effect) { *self = e; }
+    fn should_log(&self) -> bool { true }
 }
 
 #[cfg(test)]
