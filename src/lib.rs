@@ -336,6 +336,18 @@ impl Simulation {
     }
 }
 
+impl SimContext {
+    /// Returns current simulation time.
+    pub fn time(&self) -> f64 {
+	self.time
+    }
+
+    /// Returns the `Effect` that caused the process to wake up
+    pub fn effect(&self) -> Effect {
+	self.effect
+    }
+}
+
 impl Default for Simulation {
     fn default() -> Self {
         Simulation {
