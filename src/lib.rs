@@ -206,10 +206,15 @@ impl Simulation {
         id
     }
 
-    /// Schedule a process to be executed. Another way to schedule events is
+    /// Schedule a process to be executed after `time` time instants.
+    /// Another way to schedule events is
     /// yielding `Effect::Event` from a process during the simulation.
-    pub fn schedule_event(&mut self, event: Event) {
-        self.future_events.push(Reverse(event));
+    pub fn schedule_event(&mut self, time: f64, process: ProcessId) {
+        self.future_events.push(Reverse(Event {
+            time,
+            process,
+            effect: Effect::Event { time, process },
+        }));
     }
 
     /// Proceed in the simulation by 1 step
@@ -339,12 +344,12 @@ impl Simulation {
 impl SimContext {
     /// Returns current simulation time.
     pub fn time(&self) -> f64 {
-	self.time
+        self.time
     }
 
     /// Returns the `Effect` that caused the process to wake up
     pub fn effect(&self) -> Effect {
-	self.effect
+        self.effect
     }
 }
 
