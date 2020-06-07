@@ -5,7 +5,7 @@ extern crate rand;
 
 use rand::{Rng as RngT, XorShiftRng as Rng};
 
-use desim::{Effect, Simulation};
+use desim::{Effect, EndCondition, Simulation};
 
 fn main() {
     let mut s = Simulation::new();
@@ -35,4 +35,6 @@ fn main() {
     s.schedule_event(0.0, p1);
     // ...and p2 after 17 time units
     s.schedule_event(17.0, p2);
+
+    s.run(EndCondition::Time(100.0));
 }
