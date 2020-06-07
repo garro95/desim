@@ -114,10 +114,22 @@ struct Resource {
 /// simulation framework works
 pub struct Simulation {
     time: f64,
-    processes: Vec<Option<Box<dyn Generator<Yield = Effect, Return = ()> + Unpin>>>,
+    processes: Vec<Option<Box<dyn Generator<SimContext,Yield = Effect, Return = ()> + Unpin>>>,
     future_events: BinaryHeap<Reverse<Event>>,
     processed_events: Vec<Event>,
     resources: Vec<Resource>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SimContext {
+    time: f64,
+    state: SimState,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum SimState {
+    Normal,
+    Interrupted,
 }
 
 /*
@@ -134,6 +146,8 @@ pub struct Event {
     pub time: f64,
     /// Process to execute when the event occur
     pub process: ProcessId,
+    /// Simulation context state
+    state: SimState,
 }
 
 /// Specify which condition must be met for the simulation to stop.
@@ -169,7 +183,7 @@ impl Simulation {
     /// Returns the identifier of the process.
     pub fn create_process(
         &mut self,
-        process: Box<dyn Generator<Yield = Effect, Return = ()> + Unpin>,
+        process: Box<dyn Generator<SimContext, Yield = Effect, Return = ()> + Unpin>,
     ) -> ProcessId {
         let id = self.processes.len();
         self.processes.push(Some(process));
@@ -202,11 +216,12 @@ impl Simulation {
         match self.future_events.pop() {
             Some(Reverse(event)) => {
                 self.time = event.time;
-                match Pin::new(self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.")).resume(()) {
+                match Pin::new(self.processes[event.process].as_mut().expect("ERROR. Tried to resume a completed process.")).resume(SimContext{time: self.time, state: event.state}) {
                     GeneratorState::Yielded(y) => match y {
                         Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                             time: self.time + t,
                             process: event.process,
+			    state: SimState::Normal,
                         })),
                         Effect::Event(mut e) =>{
                             e.time += self.time;
@@ -222,6 +237,7 @@ impl Simulation {
                                 self.future_events.push(Reverse(Event {
                                     time: self.time,
                                     process: event.process,
+				    state: SimState::Normal,
                                 }));
                                 res.available -= 1;
                             }
@@ -233,7 +249,8 @@ impl Simulation {
                                 // some processes in queue: schedule the next.
                                     self.future_events.push(Reverse(Event{
                                         time: self.time,
-                                        process: p
+                                        process: p,
+					state: SimState::Normal,
                                     })),
                                 None => {
                                     assert!(res.available < res.allocated);
@@ -245,6 +262,7 @@ impl Simulation {
                             self.future_events.push(Reverse(Event {
                                 time: self.time,
                                 process: event.process,
+				state: SimState::Normal,
                             }))
                         }
                         Effect::Wait => {}
