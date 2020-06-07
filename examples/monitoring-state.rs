@@ -12,11 +12,11 @@
 //be followed naturally using domain-specific notions.
 //
 #![feature(generators, generator_trait)]
-extern crate rand;
 extern crate desim;
+extern crate rand;
 
+use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
 use rand::{Rng as RngT, XorShiftRng as Rng};
-use desim::{SimState, SimGen, Simulation, Effect, Event, ResourceId, EndCondition};
 
 // PCBStage describes the stages through which a PCB passes as it is processed
 // in the system.
@@ -29,7 +29,7 @@ enum PCBStage {
     SurfaceMountPlaced,
     ThruHolePlaced,
     ElectricalTestPerformed,
-    Done
+    Done,
 }
 
 // PCBState is the type yielded by proceses in this simulation. Besides the
@@ -41,13 +41,19 @@ struct PCBState {
     pcb_id: usize,
     effect: Effect,
     log: bool,
-    stage: PCBStage
+    stage: PCBStage,
 }
 
 impl SimState for PCBState {
-    fn get_effect(&self) -> Effect { self.effect }
-    fn set_effect(&mut self, e: Effect) { self.effect = e; }
-    fn should_log(&self) -> bool { self.log }
+    fn get_effect(&self) -> Effect {
+        self.effect
+    }
+    fn set_effect(&mut self, e: Effect) {
+        self.effect = e;
+    }
+    fn should_log(&self) -> bool {
+        self.log
+    }
 }
 
 // The following two structures, Resources and PCBStateCtx, are defined in order
@@ -60,7 +66,7 @@ impl SimState for PCBState {
 #[derive(Copy, Clone)]
 struct Resources {
     pip: ResourceId, // pick-and-place machine
-    et: ResourceId   // electrical tester
+    et: ResourceId,  // electrical tester
 }
 
 // We'll initialize one PCBStateCtx in each process of the simulation. It will
@@ -82,8 +88,8 @@ impl PCBStateCtx {
                 pcb_id: 0,
                 effect: Effect::Wait,
                 log: true,
-                stage: PCBStage::Init
-            }
+                stage: PCBStage::Init,
+            },
         }
     }
 
@@ -92,9 +98,7 @@ impl PCBStateCtx {
     }
 
     #[inline]
-    fn res(&mut self, r_id: ResourceId, should_log: bool,
-        stage: PCBStage, need: bool) -> PCBState
-    {
+    fn res(&mut self, r_id: ResourceId, should_log: bool, stage: PCBStage, need: bool) -> PCBState {
         let mut r_state = self.state.clone();
         r_state.stage = stage.clone();
         r_state.log = should_log;
@@ -107,9 +111,7 @@ impl PCBStateCtx {
         r_state
     }
     #[inline]
-    fn work(&self, should_log: bool, service_time: f64,
-         stage: PCBStage) -> PCBState
-    {
+    fn work(&self, should_log: bool, service_time: f64, stage: PCBStage) -> PCBState {
         let mut r_state = self.state.clone();
         r_state.stage = stage;
         r_state.log = should_log;
@@ -133,14 +135,14 @@ impl PCBStateCtx {
         let st = match self.state.stage {
             PCBStage::Init => (15 + self.rng.next_u32() % 20) as f64,
             PCBStage::SurfaceMountPlaced => (30 + self.rng.next_u32() % 20) as f64,
-            _ => 0.0 as f64
+            _ => 0.0 as f64,
         };
         self.work(true, st, PCBStage::InWork)
     }
     fn et_work(&mut self) -> PCBState {
         let st = match self.state.stage {
             PCBStage::ThruHolePlaced => (5 + self.rng.next_u32() % 5) as f64,
-            _ => 0.0 as f64
+            _ => 0.0 as f64,
         };
         self.work(true, st, PCBStage::InWork)
     }
@@ -155,47 +157,47 @@ impl PCBStateCtx {
     }
 }
 
-fn process_code(r: Resources) -> Box<SimGen<PCBState>> { Box::new(move || {
-    let mut current_pcb_id = 0;
-    let mut ctx = PCBStateCtx::new(r);
-    loop {
-        // PCB first processing stage
-        yield ctx.need_pip();
-        yield ctx.pip_work();
-        yield ctx.free_pip(PCBStage::SurfaceMountPlaced);
-        // requeue PCB for second processing stage
-        yield ctx.need_pip();
-        yield ctx.pip_work();
-        yield ctx.free_pip(PCBStage::ThruHolePlaced);
-        // queue for electrical testing
-        yield ctx.need_et();
-        yield ctx.et_work();
-        yield ctx.free_et(PCBStage::ElectricalTestPerformed);
-        yield ctx.mark(PCBStage::Done);
+fn process_code(r: Resources) -> Box<SimGen<PCBState>> {
+    Box::new(move |_| {
+        let mut current_pcb_id = 0;
+        let mut ctx = PCBStateCtx::new(r);
+        loop {
+            // PCB first processing stage
+            yield ctx.need_pip();
+            yield ctx.pip_work();
+            yield ctx.free_pip(PCBStage::SurfaceMountPlaced);
+            // requeue PCB for second processing stage
+            yield ctx.need_pip();
+            yield ctx.pip_work();
+            yield ctx.free_pip(PCBStage::ThruHolePlaced);
+            // queue for electrical testing
+            yield ctx.need_et();
+            yield ctx.et_work();
+            yield ctx.free_et(PCBStage::ElectricalTestPerformed);
+            yield ctx.mark(PCBStage::Done);
 
-        current_pcb_id += 1;
-        ctx.set_new_id(current_pcb_id);
-    }
-})
+            current_pcb_id += 1;
+            ctx.set_new_id(current_pcb_id);
+        }
+    })
 }
 
-fn main(){
+fn main() {
     let mut s = Simulation::new();
     let pip = s.create_resource(1);
     let et = s.create_resource(1);
     let res = Resources { pip, et };
     for _ in 1..5 {
         let p = s.create_process(process_code(res));
-        s.schedule_event(Event{ time: 0.0, process: p});
+        s.schedule_event(0.0, p);
     }
     s = s.run(EndCondition::Time(500.0));
     let evts = s.processed_events();
     println!("time: (pid, pcb_id) action stage");
     for (ev, state) in evts {
-        println!("{:?}: id({},{}) {:?}, {:?}",
-                 ev.time,
-                 ev.process, state.pcb_id,
-                 state.effect, state.stage);
+        println!(
+            "{:?}: id({},{}) {:?}, {:?}",
+            ev.time(), ev.process(), state.pcb_id, state.effect, state.stage
+        );
     }
-
 }

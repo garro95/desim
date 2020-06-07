@@ -111,7 +111,7 @@ use std::pin::Pin;
 /// }
 ///
 /// let mut sim = Simulation::new();
-/// sim.create_process(Box::new(move || {
+/// sim.create_process(Box::new(move |_| {
 ///     yield ItemState { stage: StageType::FirstPass,
 ///                       effect: Effect::TimeOut(10.0),
 ///                       log: true,
@@ -288,13 +288,15 @@ impl<T: SimState + Clone> Simulation<T> {
         match self.future_events.pop() {
             Some(Reverse(event)) => {
                 self.time = event.time;
-                let gstatepin = Pin::new(self.processes[event.process]
-                                             .as_mut()
-                                             .expect("ERROR. Tried to resume a completed process.")
-                                        ).resume(SimContext {
-					    time: self.time,
-					    effect: event.effect,
-					});
+                let gstatepin = Pin::new(
+                    self.processes[event.process]
+                        .as_mut()
+                        .expect("ERROR. Tried to resume a completed process."),
+                )
+                .resume(SimContext {
+                    time: self.time,
+                    effect: event.effect,
+                });
                 // log event
                 // logging needs to happen before the processing because processing
                 // can add further events (such as resource acquired/released) and
@@ -309,72 +311,73 @@ impl<T: SimState + Clone> Simulation<T> {
                 // process event
                 match gstatepin {
                     GeneratorState::Yielded(y) => {
-			let effect = y.get_effect();
-			match effect {
-                        Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
-                            time: self.time + t,
-                            process: event.process,
-                            effect,
-                        })),
-                        Effect::Event { time, process } => {
-                            let e = Event {
-                                time: time + self.time,
-                                process,
+                        let effect = y.get_effect();
+                        match effect {
+                            Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
+                                time: self.time + t,
+                                process: event.process,
                                 effect,
-                            };
-                            self.future_events.push(Reverse(e))
-                        }
-                        Effect::Request(r) => {
-                            let mut res = &mut self.resources[r];
-                            if res.available == 0 {
-                                // enqueue the process
-                                res.queue.push_back(event.process);
-                            } else {
-                                // the process can use the resource immediately
+                            })),
+                            Effect::Event { time, process } => {
+                                let e = Event {
+                                    time: time + self.time,
+                                    process,
+                                    effect,
+                                };
+                                self.future_events.push(Reverse(e))
+                            }
+                            Effect::Request(r) => {
+                                let mut res = &mut self.resources[r];
+                                if res.available == 0 {
+                                    // enqueue the process
+                                    res.queue.push_back(event.process);
+                                } else {
+                                    // the process can use the resource immediately
+                                    self.future_events.push(Reverse(Event {
+                                        time: self.time,
+                                        process: event.process,
+                                        effect,
+                                    }));
+                                    res.available -= 1;
+                                }
+                            }
+                            Effect::Release(r) => {
+                                let res = &mut self.resources[r];
+                                match res.queue.pop_front() {
+                                    Some(p) =>
+                                    // some processes in queue: schedule the next.
+                                    {
+                                        self.future_events.push(Reverse(Event {
+                                            time: self.time,
+                                            process: p,
+                                            effect: Effect::Request(r),
+                                        }))
+                                    }
+                                    None => {
+                                        assert!(res.available < res.allocated);
+                                        res.available += 1;
+                                    }
+                                }
+                                // after releasing the resource the process
+                                // can be resumed
                                 self.future_events.push(Reverse(Event {
                                     time: self.time,
                                     process: event.process,
                                     effect,
-                                }));
-                                res.available -= 1;
+                                }))
+                            }
+                            Effect::Wait => {}
+                            Effect::Trace => {
+                                // this event is only for tracing, reschedule
+                                // immediately
+                                self.future_events.push(Reverse(Event {
+                                    time: self.time,
+                                    process: event.process,
+                                    effect,
+                                }))
                             }
                         }
-                        Effect::Release(r) => {
-                            let res = &mut self.resources[r];
-                            match res.queue.pop_front() {
-                                Some(p) =>
-                                // some processes in queue: schedule the next.
-                                {
-                                    self.future_events.push(Reverse(Event {
-                                        time: self.time,
-                                        process: p,
-                                        effect: Effect::Request(r),
-                                    }))
-                                }
-                                None => {
-                                    assert!(res.available < res.allocated);
-                                    res.available += 1;
-                                }
-                            }
-                            // after releasing the resource the process
-                            // can be resumed
-                            self.future_events.push(Reverse(Event {
-                                time: self.time,
-                                process: event.process,
-                                effect,
-                            }))
-                        }
-                        Effect::Wait => {}
-                        Effect::Trace => {
-                            // this event is only for tracing, reschedule
-                            // immediately
-                            self.future_events.push(Reverse(Event {
-                                time: self.time,
-                                process: event.process,
-				effect
-                            }))
-                        }
-                    },
+                    }
                     GeneratorState::Complete(_) => {
                         // FIXME: removing the process from the vector would invalidate
                         // all existing `ProcessId`s, but keeping it would be a
@@ -411,7 +414,6 @@ impl<T: SimState + Clone> Simulation<T> {
             EndCondition::NoEvents => self.future_events.len() == 0,
             EndCondition::NSteps(n) => self.steps == *n,
         }
-        false
     }
 }
 
@@ -426,6 +428,17 @@ impl SimContext {
         self.effect
     }
 }
+
+impl Event {
+    pub fn time(&self) -> f64 {
+	self.time
+    }
+
+    pub fn process(&self) -> ProcessId {
+	self.process
+    }
+}
+
 impl<T: SimState + Clone> Default for Simulation<T> {
     fn default() -> Self {
         Simulation::<T> {
@@ -463,9 +476,15 @@ impl Ord for Event {
 }
 
 impl SimState for Effect {
-    fn get_effect(&self) -> Effect { *self }
-    fn set_effect(&mut self, e: Effect) { *self = e; }
-    fn should_log(&self) -> bool { true }
+    fn get_effect(&self) -> Effect {
+        *self
+    }
+    fn set_effect(&mut self, e: Effect) {
+        *self = e;
+    }
+    fn should_log(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
