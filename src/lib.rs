@@ -393,7 +393,6 @@ mod tests {
     #[test]
     fn it_works() {
         use Effect;
-        use Event;
         use Simulation;
 
         let mut s = Simulation::new();
@@ -405,10 +404,7 @@ mod tests {
                 yield Effect::TimeOut(a);
             }
         }));
-        s.schedule_event(Event {
-            time: 0.0,
-            process: p,
-        });
+        s.schedule_event(0.0, p);
         s.step();
         s.step();
         assert_eq!(s.time(), 1.0);
@@ -422,7 +418,6 @@ mod tests {
     fn run() {
         use Effect;
         use EndCondition;
-        use Event;
         use Simulation;
 
         let mut s = Simulation::new();
@@ -433,10 +428,7 @@ mod tests {
                 yield Effect::TimeOut(tik);
             }
         }));
-        s.schedule_event(Event {
-            time: 0.0,
-            process: p,
-        });
+        s.schedule_event(0.0, p);
         let s = s.run(EndCondition::Time(10.0));
         println!("{}", s.time());
         assert!(s.time() >= 10.0);
@@ -446,35 +438,28 @@ mod tests {
     fn resource() {
         use Effect;
         use EndCondition::NoEvents;
-        use Event;
         use Simulation;
 
         let mut s = Simulation::new();
         let r = s.create_resource(1);
 
         // simple process that lock the resource for 7 time units
-        let p1 = s.create_process(Box::new(move || {
+        let p1 = s.create_process(Box::new(move |_| {
             yield Effect::Request(r);
             yield Effect::TimeOut(7.0);
             yield Effect::Release(r);
         }));
         // simple process that holds the resource for 3 time units
-        let p2 = s.create_process(Box::new(move || {
+        let p2 = s.create_process(Box::new(move |_| {
             yield Effect::Request(r);
             yield Effect::TimeOut(3.0);
             yield Effect::Release(r);
         }));
 
         // let p1 start immediately...
-        s.schedule_event(Event {
-            time: 0.0,
-            process: p1,
-        });
+        s.schedule_event(0.0, p1);
         // let p2 start after 2 t.u., when r is not available
-        s.schedule_event(Event {
-            time: 2.0,
-            process: p2,
-        });
+        s.schedule_event(2.0, p2);
         // p2 will wait r to be free (time 7.0) and its timeout
         // of 3.0 t.u. The simulation will end at time 10.0
 
