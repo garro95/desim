@@ -1,16 +1,16 @@
 //simulate the scheduling of two processes on one CPU
 #![feature(generators, generator_trait)]
-extern crate rand;
 extern crate desim;
+extern crate rand;
 
 use rand::{Rng as RngT, XorShiftRng as Rng};
 
-use desim::{Simulation, Effect, Event};
+use desim::{Effect, EndCondition, Simulation};
 
-fn main(){
+fn main() {
     let mut s = Simulation::new();
     let cpu = s.create_resource(1);
-    let p1 = s.create_process(Box::new(move || {
+    let p1 = s.create_process(Box::new(move |_| {
         for _ in 0..10 {
             // wait for the cpu to be available
             yield Effect::Request(cpu);
@@ -20,9 +20,9 @@ fn main(){
             yield Effect::Release(cpu);
         }
     }));
-    let p2 = s.create_process(Box::new(move || {
+    let p2 = s.create_process(Box::new(move |_| {
         let mut rng = Rng::new_unseeded();
-        loop{
+        loop {
             // wait for the CPU
             yield Effect::Request(cpu);
             // do some job for a random amount of time units between 0 and 10
@@ -32,7 +32,9 @@ fn main(){
         }
     }));
     // let p1 to start immediately...
-    s.schedule_event(Event{time: 0.0, process: p1});
+    s.schedule_event(0.0, p1);
     // ...and p2 after 17 time units
-    s.schedule_event(Event{time: 17.0, process: p2});
+    s.schedule_event(17.0, p2);
+
+    s.run(EndCondition::Time(100.0));
 }
