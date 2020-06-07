@@ -12,27 +12,12 @@ the experimental _generators_ (coroutine) rust feature.
 
 You can read the [API documentation here](docs.rs/desim)
 
-**This project is blocked waiting for some features related to _generators_.
-In particular the possibility to resume the generator with arguments.
-The implementation of the Clone trait for generators, such that one can clone
-the instructions of the generator without copying the current state, would
-much improve the usability of this crate.**
-
 ## Usage
 To use the framework, add the following line to your Cargo.toml:
 ```
 desim = "0.1"
 ```
-Notice that a change in the last digit (patch number) means that the interface
-is backward and forward compatible and contains other type of fixes, like bug
-fixes or documentation updates.
-A change in the middle digit (minor) means that the interface is backward
-compatible but includes something new, so that the previous version may be not
-forward compatible.
-A change in the first, left digit may means a breacking change in the interface,
-that will not be backward compatible anymore.
-Version 1.0.0 may be an exception to this and may means just that the API is
-stable and is considered production ready.
+Version numbers follow the [semver](https://semver.org/) convention.
 
 The simulation environment is provided by the `Simulation` struct, which exposes
 methods to spawn processes, allocate resources and schedule events.
@@ -60,4 +45,5 @@ basis of a proprietary one. Improvements of this work or simulation software
 written using desim as a library should be free software as well.
 
 ## Changes
+0.2.0 With generators resume arguments support, add a Simulation Context that is passed to processes on resume and can be used to retrieve the simulation time or the 
 0.1.0 First release
