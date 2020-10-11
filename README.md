@@ -10,7 +10,7 @@ implementation.
 To achieve the same ease of use remaining light and efficient, it is based on
 the experimental _generators_ (coroutine) rust feature.
 
-You can read the [API documentation here](docs.rs/desim)
+You can read the [API documentation here](https://docs.rs/desim)
 
 ## Usage
 To use the framework, add the following line to your Cargo.toml:
