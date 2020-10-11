@@ -45,5 +45,5 @@ basis of a proprietary one. Improvements of this work or simulation software
 written using desim as a library should be free software as well.
 
 ## Changes
-0.2.0 With generators resume arguments support, add a Simulation Context that is passed to processes on resume and can be used to retrieve the simulation time or the 
+0.2.0 With generators resume arguments support, add a Simulation Context that is passed to processes on resume and can be used to retrieve the simulation time or the event that caused the generator to resume  
 0.1.0 First release
