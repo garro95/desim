@@ -133,6 +133,7 @@ pub trait SimState {
 /// The effect is yelded by a process generator to
 /// interact with the simulation environment.
 #[derive(Debug, Copy, Clone)]
+#[non_exhaustive]
 pub enum Effect {
     /// The process that yields this effect will be resumed
     /// after the speified time
