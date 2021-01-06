@@ -52,7 +52,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! The process may also return. In that case it can not be resumed anymore.
 //!
 //!
-//! # Resources
+//! # Resource
 //! A resource is a finite amount of entities that can be used by one process
 //! a time. When all the instances of the resource of interest are being used by
 //! a process, the requiring one is enqueued in a FIFO and is resumed when the
@@ -70,9 +70,65 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //!
 
 #![feature(generators, generator_trait)]
-use std::ops::{Generator, GeneratorState};
-use std::collections::{BinaryHeap, VecDeque};
 use std::cmp::{Ordering, Reverse};
+use std::collections::{BinaryHeap, VecDeque};
+use std::ops::{Generator, GeneratorState};
+use std::pin::Pin;
+
+/// Data structures implementing this trait can be yielded from the generator
+/// associated with a `Process`. This allows attaching application-specific data
+/// to `Effect`s. This data is then carried arround by the Simulation, passed
+/// into user callbacks for context or simply logged for later.
+///
+/// As a simple example, implementing SimState for a type (as shown for
+/// ItemState below) allows users to track item stages.
+///
+/// A process can then yield `ItemState` instead of `Effect` types:
+///
+/// ```
+/// #![feature (generators, generator_trait)]
+/// use desim::{Effect, SimState, Simulation};
+///
+/// // enum used as part of state logged during simulation
+/// #[derive(Clone)]
+/// enum StageType {
+///     FirstPass,
+///     SecondPass,
+/// }
+///
+/// // structure yielded from processes of the simulation
+/// #[derive(Clone)]
+/// struct ItemState {
+///     stage: StageType,
+///     effect: Effect,
+///     log: bool,
+/// }
+///
+/// impl SimState for ItemState {
+///     fn get_effect(&self) -> Effect { self.effect }
+///     fn set_effect(&mut self, e: Effect) { self.effect = e; }
+///     fn should_log(&self) -> bool { self.log }
+/// }
+///
+/// let mut sim = Simulation::new();
+/// sim.create_process(Box::new(move |_| {
+///     yield ItemState { stage: StageType::FirstPass,
+///                       effect: Effect::TimeOut(10.0),
+///                       log: true,
+///                     };
+/// }));
+/// ```
+///
+/// Calling `sim.processed_steps()` then returns a vector of (Event, ItemState)
+/// pairs, one for each yielded value where should_log() returned true.
+///
+/// For a full example, see examples/monitoring-state.rs
+///
+pub trait SimState {
+    fn get_effect(&self) -> Effect;
+    fn set_effect(&mut self, Effect);
+    fn should_log(&self) -> bool;
+}
 
 /// The effect is yelded by a process generator to
 /// interact with the simulation environment.
@@ -82,19 +138,27 @@ pub enum Effect {
     /// after the speified time
     TimeOut(f64),
     /// Yielding this effect it is possible to schedule the specified event
-    Event(Event),
+    Event {
+        /// Time interval between the current simulation time and the event schedule
+        time: f64,
+        /// Process to execute when the event occur
+        process: ProcessId,
+    },
     /// This effect is yielded to request a resource
     Request(ResourceId),
     /// This effect is yielded to release a resource that is not needed anymore.
     Release(ResourceId),
     /// Keep the process' state until it is resumed by another event.
     Wait,
+    Trace,
 }
 
-/// Identifies a process. Can be used to resume it from another one.
+/// Identifies a process. Can be used to resume it from another one and to schedule it.
 pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
+/// The type of each `Process` generator
+pub type SimGen<T> = dyn Generator<SimContext, Yield = T, Return = ()> + Unpin;
 
 #[derive(Debug)]
 struct Resource {
@@ -111,12 +175,21 @@ struct Resource {
 ///
 /// See the crate-level documentation for more information about how the
 /// simulation framework works
-pub struct Simulation {
+pub struct Simulation<T: SimState + Clone> {
     time: f64,
-    processes: Vec<Box<Generator<Yield = Effect, Return = ()>>>,
+    steps: usize,
+    processes: Vec<Option<Box<SimGen<T>>>>,
     future_events: BinaryHeap<Reverse<Event>>,
-    processed_events: Vec<Event>,
+    processed_events: Vec<(Event, T)>,
     resources: Vec<Resource>,
+}
+
+/// The Simulation Context is the argument used to resume the generator.
+/// It can be used to retrieve the simulation time and the effect that caused the process' wake up.
+#[derive(Debug, Clone)]
+pub struct SimContext {
+    time: f64,
+    effect: Effect,
 }
 
 /*
@@ -129,19 +202,28 @@ pub struct ParallelSimulation {
 /// or by the owner of a `Simulation` through the `schedule` method
 #[derive(Debug, Copy, Clone)]
 pub struct Event {
-    pub time: f64,
-    pub process: ProcessId,
+    /// Time interval between the current simulation time and the event schedule
+    time: f64,
+    /// Process to execute when the event occur
+    process: ProcessId,
+    /// Effect that generated the event
+    effect: Effect,
 }
 
 /// Specify which condition must be met for the simulation to stop.
 pub enum EndCondition {
+    /// Run the simulation until a certain point in time is reached.
     Time(f64),
+    /// Run the simulation until there are no more events scheduled.
     NoEvents,
+    /// Execute exactly N steps of the simulation.
+    NSteps(usize),
 }
 
-impl Simulation {
-    pub fn new() -> Simulation {
-        Simulation::default()
+impl<T: SimState + Clone> Simulation<T> {
+    /// Create a new `Simulation` environment.
+    pub fn new() -> Simulation<T> {
+        Simulation::<T>::default()
     }
 
     /// Returns the current simulation time
@@ -150,35 +232,27 @@ impl Simulation {
     }
 
     /// Returns the log of processed events
-    pub fn processed_events(&self) -> &[Event] {
+    pub fn processed_events(&self) -> &[(Event, T)] {
         self.processed_events.as_slice()
     }
 
-    /// Create a process. That is a generator that can Yield `Effect`s.
-    /// An effect may be a new `Event` to schedule, a `Timeout` after which the
-    /// same process should be executed, or a `Request` to hold an instance
-    /// of a finite resource.
+    /// Create a process.
+    ///
+    /// For more information about a process, see the crate level documentation
     ///
     /// Returns the identifier of the process.
     pub fn create_process(
         &mut self,
-        process: Box<Generator<Yield = Effect, Return = ()>>,
+        process: Box<dyn Generator<SimContext, Yield = T, Return = ()> + Unpin>,
     ) -> ProcessId {
         let id = self.processes.len();
-        self.processes.push(process);
+        self.processes.push(Some(process));
         id
     }
 
     /// Create a new finite resource, of which n instancies are available.
     ///
-    /// The resource can be requested by a process yielding a `Request`.
-    /// If the requested resource is not available at that time, the process
-    /// is enqueued until one instance of the resource is freed.
-    ///
-    /// When the process has done with the resource, it has to yield `Release`,
-    /// so that other processes can use that.
-    ///
-    /// The queue has a FIFO (first in first out) policy.
+    /// For more information about a resource, see the crate level documentation
     ///
     /// Returns the identifier of the resource
     pub fn create_resource(&mut self, n: usize) -> ResourceId {
@@ -191,105 +265,185 @@ impl Simulation {
         id
     }
 
-    /// Schedule a process to be executed. Another way to schedule events is
+    /// Schedule a process to be executed after `time` time instants.
+    /// Another way to schedule events is
     /// yielding `Effect::Event` from a process during the simulation.
-    pub fn schedule_event(&mut self, event: Event) {
-        self.future_events.push(Reverse(event));
+    pub fn schedule_event(&mut self, time: f64, process: ProcessId) {
+        self.future_events.push(Reverse(Event {
+            time,
+            process,
+            effect: Effect::Event { time, process },
+        }));
+    }
+
+    fn log_processed_event(&mut self, event: &Event, sim_state: T) {
+        if sim_state.should_log() {
+            self.processed_events.push((*event, sim_state));
+        }
     }
 
     /// Proceed in the simulation by 1 step
     pub fn step(&mut self) {
+        self.steps += 1;
         match self.future_events.pop() {
             Some(Reverse(event)) => {
                 self.time = event.time;
-                match unsafe { self.processes[event.process].resume() } {
-                    GeneratorState::Yielded(y) => match y {
-                        Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
-                            time: self.time + t,
-                            process: event.process,
-                        })),
-                        Effect::Event(e) => self.future_events.push(Reverse(e)),
-                        Effect::Request(r) => {
-                            let mut res = &mut self.resources[r];
-                            if res.available == 0 {
-                                // enqueue the process
-                                res.queue.push_back(event.process);
-                            } else {
-                                // the process can use the resource immediately
+                let gstatepin = Pin::new(
+                    self.processes[event.process]
+                        .as_mut()
+                        .expect("ERROR. Tried to resume a completed process."),
+                )
+                .resume(SimContext {
+                    time: self.time,
+                    effect: event.effect,
+                });
+                // log event
+                // logging needs to happen before the processing because processing
+                // can add further events (such as resource acquired/released) and
+                // it becomes confusing if you first get a resource acquired event
+                // and only log the request for it afterwards.
+                match gstatepin.clone() {
+                    GeneratorState::Yielded(y) => {
+                        self.log_processed_event(&event, y);
+                    }
+                    GeneratorState::Complete(_) => {}
+                }
+                // process event
+                match gstatepin {
+                    GeneratorState::Yielded(y) => {
+                        let effect = y.get_effect();
+                        match effect {
+                            Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
+                                time: self.time + t,
+                                process: event.process,
+                                effect,
+                            })),
+                            Effect::Event { time, process } => {
+                                let e = Event {
+                                    time: time + self.time,
+                                    process,
+                                    effect,
+                                };
+                                self.future_events.push(Reverse(e))
+                            }
+                            Effect::Request(r) => {
+                                let mut res = &mut self.resources[r];
+                                if res.available == 0 {
+                                    // enqueue the process
+                                    res.queue.push_back(event.process);
+                                } else {
+                                    // the process can use the resource immediately
+                                    self.future_events.push(Reverse(Event {
+                                        time: self.time,
+                                        process: event.process,
+                                        effect,
+                                    }));
+                                    res.available -= 1;
+                                }
+                            }
+                            Effect::Release(r) => {
+                                let res = &mut self.resources[r];
+                                match res.queue.pop_front() {
+                                    Some(p) =>
+                                    // some processes in queue: schedule the next.
+                                    {
+                                        self.future_events.push(Reverse(Event {
+                                            time: self.time,
+                                            process: p,
+                                            effect: Effect::Request(r),
+                                        }))
+                                    }
+                                    None => {
+                                        assert!(res.available < res.allocated);
+                                        res.available += 1;
+                                    }
+                                }
+                                // after releasing the resource the process
+                                // can be resumed
                                 self.future_events.push(Reverse(Event {
                                     time: self.time,
                                     process: event.process,
-                                }));
-                                res.available -= 1;
+                                    effect,
+                                }))
+                            }
+                            Effect::Wait => {}
+                            Effect::Trace => {
+                                // this event is only for tracing, reschedule
+                                // immediately
+                                self.future_events.push(Reverse(Event {
+                                    time: self.time,
+                                    process: event.process,
+                                    effect,
+                                }))
                             }
                         }
-                        Effect::Release(r) => {
-                            let res = &mut self.resources[r];
-                            match res.queue.pop_front() {
-                                Some(p) =>
-                                // some processes in queue: schedule the next.
-                                    self.future_events.push(Reverse(Event{
-                                        time: self.time,
-                                        process: p
-                                    })),
-                                None => {
-                                    assert!(res.available < res.allocated);
-                                    res.available += 1;
-                                }
-                            }
-                            // after releasing the resource the process
-                            // can be resumed
-                            self.future_events.push(Reverse(Event {
-                                time: self.time,
-                                process: event.process,
-                            }))
-                        }
-                        Effect::Wait => {}
-                    },
+                    }
                     GeneratorState::Complete(_) => {
-                        // removing the process from the vector would invalidate
+                        // FIXME: removing the process from the vector would invalidate
                         // all existing `ProcessId`s, but keeping it would be a
                         // waste of space since it is completed.
-                        // May be worth to use another data structure
+                        // May be worth to use another data structure.
+                        // At least let's remove the generator itself.
+                        self.processes[event.process].take();
                     }
                 }
-                self.processed_events.push(event);
             }
             None => {}
         }
     }
 
     /// Run the simulation until and ending condition is met.
-    pub fn run(mut self, until: EndCondition) -> Simulation {
+    pub fn run(mut self, until: EndCondition) -> Simulation<T> {
         while !self.check_ending_condition(&until) {
             self.step();
         }
         self
     }
     /*
-    pub fn nonblocking_run(mut self, until: EndCondition) {
-
-    }
-     */
+        pub fn nonblocking_run(mut self, until: EndCondition) -> thread::JoinHandle<Simulation> {
+            thread::spawn(move || {
+                self.run(until)
+            })
+        }
+    */
 
     /// Return `true` if the ending condition was met, `false` otherwise.
     fn check_ending_condition(&self, ending_condition: &EndCondition) -> bool {
         match &ending_condition {
-            EndCondition::Time(t) => if self.time >= *t {
-                return true
-            },
-            EndCondition::NoEvents => if self.future_events.len() == 0 {
-                return true
-            }
+            EndCondition::Time(t) => self.time >= *t,
+            EndCondition::NoEvents => self.future_events.len() == 0,
+            EndCondition::NSteps(n) => self.steps == *n,
         }
-        false
     }
 }
 
-impl Default for Simulation {
+impl SimContext {
+    /// Returns current simulation time.
+    pub fn time(&self) -> f64 {
+        self.time
+    }
+
+    /// Returns the `Effect` that caused the process to wake up
+    pub fn effect(&self) -> Effect {
+        self.effect
+    }
+}
+
+impl Event {
+    pub fn time(&self) -> f64 {
+	self.time
+    }
+
+    pub fn process(&self) -> ProcessId {
+	self.process
+    }
+}
+
+impl<T: SimState + Clone> Default for Simulation<T> {
     fn default() -> Self {
-        Simulation {
+        Simulation::<T> {
             time: 0.0,
+            steps: 0,
             processes: Vec::default(),
             future_events: BinaryHeap::default(),
             processed_events: Vec::default(),
@@ -321,24 +475,35 @@ impl Ord for Event {
     }
 }
 
+impl SimState for Effect {
+    fn get_effect(&self) -> Effect {
+        *self
+    }
+    fn set_effect(&mut self, e: Effect) {
+        *self = e;
+    }
+    fn should_log(&self) -> bool {
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn it_works() {
-        use Simulation;
         use Effect;
-        use Event;
+        use Simulation;
 
         let mut s = Simulation::new();
-        let p = s.create_process(Box::new(|| {
+        let p = s.create_process(Box::new(|_| {
             let mut a = 0.0;
             loop {
                 a += 1.0;
-                
+
                 yield Effect::TimeOut(a);
             }
         }));
-        s.schedule_event(Event{time: 0.0, process: p});
+        s.schedule_event(0.0, p);
         s.step();
         s.step();
         assert_eq!(s.time(), 1.0);
@@ -350,20 +515,19 @@ mod tests {
 
     #[test]
     fn run() {
-        use Simulation;
         use Effect;
-        use Event;
         use EndCondition;
+        use Simulation;
 
         let mut s = Simulation::new();
-        let p = s.create_process( Box::new(|| {
+        let p = s.create_process(Box::new(|_| {
             let tik = 0.7;
-            loop{
+            loop {
                 println!("tik");
                 yield Effect::TimeOut(tik);
             }
         }));
-        s.schedule_event(Event{time: 0.0, process: p});
+        s.schedule_event(0.0, p);
         let s = s.run(EndCondition::Time(10.0));
         println!("{}", s.time());
         assert!(s.time() >= 10.0);
@@ -371,34 +535,33 @@ mod tests {
 
     #[test]
     fn resource() {
-        use Simulation;
         use Effect;
-        use Event;
         use EndCondition::NoEvents;
+        use Simulation;
 
         let mut s = Simulation::new();
         let r = s.create_resource(1);
 
         // simple process that lock the resource for 7 time units
-        let p1 = s.create_process(Box::new(move || {
+        let p1 = s.create_process(Box::new(move |_| {
             yield Effect::Request(r);
             yield Effect::TimeOut(7.0);
             yield Effect::Release(r);
         }));
         // simple process that holds the resource for 3 time units
-        let p2 = s.create_process(Box::new(move || {
+        let p2 = s.create_process(Box::new(move |_| {
             yield Effect::Request(r);
             yield Effect::TimeOut(3.0);
             yield Effect::Release(r);
         }));
 
         // let p1 start immediately...
-        s.schedule_event(Event{time: 0.0, process: p1});
+        s.schedule_event(0.0, p1);
         // let p2 start after 2 t.u., when r is not available
-        s.schedule_event(Event{time: 2.0, process: p2});
+        s.schedule_event(2.0, p2);
         // p2 will wait r to be free (time 7.0) and its timeout
         // of 3.0 t.u. The simulation will end at time 10.0
-        
+
         let s = s.run(NoEvents);
         println!("{:?}", s.processed_events());
         assert_eq!(s.time(), 10.0);
