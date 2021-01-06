@@ -13,7 +13,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-//! This crate implement a discrete event simulation framework
+//! This crate implements a discrete time event simulation framework
 //! inspired by the SimPy library for Python. It uses the generator
 //! feature that is nightly. Once the feature is stabilized, also this
 //! crate will use stable. Generators will be the only nightly feature
@@ -44,11 +44,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //!
 //! When a new process is created in the simulation, an identifier, of type
 //! `ProcessId` is assigned to it. That id can be used to schedule an event that
-//! resume the process.
+//! resumes the process.
 //!
 //! A process can be stopped and resumed later on. To stop the process, the
 //! generator yields an `Effect` that specify what the simulator should do.
-//! For example, a generator can set a timeout after witch it is executed again.
+//! For example, a generator can set a timeout after which it is executed again.
 //! The process may also return. In that case it can not be resumed anymore.
 //!
 //!
