@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: add nightly
+      run: rustup toolchain install nightly-x86_64-unknown-linux-gnu
     - name: Build
       run: cargo +nightly build --verbose
     - name: Run tests
