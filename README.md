@@ -18,7 +18,7 @@ You can read the [API documentation here](https://docs.rs/desim)
 ## Usage
 To use the framework, add the following line to your Cargo.toml:
 ```
-desim = "0.1"
+desim = "0.2"
 ```
 Version numbers follow the [semver](https://semver.org/) convention.
 
