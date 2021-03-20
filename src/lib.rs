@@ -159,7 +159,7 @@ pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
 /// The type of each `Process` generator
-pub type SimGen<T> = dyn Generator<SimContext, Yield = T, Return = ()> + Unpin;
+pub type SimGen<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
 
 #[derive(Debug)]
 struct Resource {
@@ -180,17 +180,17 @@ pub struct Simulation<T: SimState + Clone> {
     time: f64,
     steps: usize,
     processes: Vec<Option<Box<SimGen<T>>>>,
-    future_events: BinaryHeap<Reverse<Event>>,
-    processed_events: Vec<(Event, T)>,
+    future_events: BinaryHeap<Reverse<Event<T>>>,
+    processed_events: Vec<(Event<T>, T)>,
     resources: Vec<Resource>,
 }
 
 /// The Simulation Context is the argument used to resume the generator.
 /// It can be used to retrieve the simulation time and the effect that caused the process' wake up.
 #[derive(Debug, Clone)]
-pub struct SimContext {
+pub struct SimContext<T> {
     time: f64,
-    effect: Effect,
+    state: T,
 }
 
 /*
@@ -202,13 +202,13 @@ pub struct ParallelSimulation {
 /// An event that can be scheduled by a process, yelding the `Event` `Effect`
 /// or by the owner of a `Simulation` through the `schedule` method
 #[derive(Debug, Copy, Clone)]
-pub struct Event {
+pub struct Event<T> {
     /// Time interval between the current simulation time and the event schedule
     time: f64,
     /// Process to execute when the event occur
     process: ProcessId,
     /// Effect that generated the event
-    effect: Effect,
+    state: T,
 }
 
 /// Specify which condition must be met for the simulation to stop.
@@ -233,7 +233,7 @@ impl<T: SimState + Clone> Simulation<T> {
     }
 
     /// Returns the log of processed events
-    pub fn processed_events(&self) -> &[(Event, T)] {
+    pub fn processed_events(&self) -> &[(Event<T>, T)] {
         self.processed_events.as_slice()
     }
 
@@ -244,7 +244,7 @@ impl<T: SimState + Clone> Simulation<T> {
     /// Returns the identifier of the process.
     pub fn create_process(
         &mut self,
-        process: Box<dyn Generator<SimContext, Yield = T, Return = ()> + Unpin>,
+        process: Box<dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin>,
     ) -> ProcessId {
         let id = self.processes.len();
         self.processes.push(Some(process));
@@ -269,17 +269,18 @@ impl<T: SimState + Clone> Simulation<T> {
     /// Schedule a process to be executed after `time` time instants.
     /// Another way to schedule events is
     /// yielding `Effect::Event` from a process during the simulation.
-    pub fn schedule_event(&mut self, time: f64, process: ProcessId) {
+    // TODO: Review this API
+    pub fn schedule_event(&mut self, time: f64, process: ProcessId, state: T) {
         self.future_events.push(Reverse(Event {
             time,
             process,
-            effect: Effect::Event { time, process },
+            state,
         }));
     }
 
-    fn log_processed_event(&mut self, event: &Event, sim_state: T) {
+    fn log_processed_event(&mut self, event: &Event<T>, sim_state: T) {
         if sim_state.should_log() {
-            self.processed_events.push((*event, sim_state));
+            self.processed_events.push((event.clone(), sim_state));
         }
     }
 
@@ -296,7 +297,7 @@ impl<T: SimState + Clone> Simulation<T> {
                 )
                 .resume(SimContext {
                     time: self.time,
-                    effect: event.effect,
+                    state: event.state.clone(),
                 });
                 // log event
                 // logging needs to happen before the processing because processing
@@ -317,13 +318,13 @@ impl<T: SimState + Clone> Simulation<T> {
                             Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                                 time: self.time + t,
                                 process: event.process,
-                                effect,
+                                state: y,
                             })),
                             Effect::Event { time, process } => {
                                 let e = Event {
                                     time: time + self.time,
                                     process,
-                                    effect,
+                                    state: y,
                                 };
                                 self.future_events.push(Reverse(e))
                             }
@@ -337,7 +338,7 @@ impl<T: SimState + Clone> Simulation<T> {
                                     self.future_events.push(Reverse(Event {
                                         time: self.time,
                                         process: event.process,
-                                        effect,
+                                        state: y,
                                     }));
                                     res.available -= 1;
                                 }
@@ -348,10 +349,12 @@ impl<T: SimState + Clone> Simulation<T> {
                                     Some(p) =>
                                     // some processes in queue: schedule the next.
                                     {
+					let mut y = y.clone();
+					y.set_effect(Effect::Request(r));
                                         self.future_events.push(Reverse(Event {
                                             time: self.time,
                                             process: p,
-                                            effect: Effect::Request(r),
+                                            state: y,
                                         }))
                                     }
                                     None => {
@@ -364,7 +367,7 @@ impl<T: SimState + Clone> Simulation<T> {
                                 self.future_events.push(Reverse(Event {
                                     time: self.time,
                                     process: event.process,
-                                    effect,
+                                    state: y,
                                 }))
                             }
                             Effect::Wait => {}
@@ -374,7 +377,7 @@ impl<T: SimState + Clone> Simulation<T> {
                                 self.future_events.push(Reverse(Event {
                                     time: self.time,
                                     process: event.process,
-                                    effect,
+                                    state: y,
                                 }))
                             }
                         }
@@ -418,19 +421,19 @@ impl<T: SimState + Clone> Simulation<T> {
     }
 }
 
-impl SimContext {
+impl<T> SimContext<T> {
     /// Returns current simulation time.
     pub fn time(&self) -> f64 {
         self.time
     }
 
     /// Returns the `Effect` that caused the process to wake up
-    pub fn effect(&self) -> Effect {
-        self.effect
+    pub fn state(&self) -> &T {
+        &self.state
     }
 }
 
-impl Event {
+impl<T> Event<T> {
     pub fn time(&self) -> f64 {
 	self.time
     }
@@ -453,22 +456,22 @@ impl<T: SimState + Clone> Default for Simulation<T> {
     }
 }
 
-impl PartialEq for Event {
-    fn eq(&self, other: &Event) -> bool {
+impl<T> PartialEq for Event<T> {
+    fn eq(&self, other: &Event<T>) -> bool {
         self.time == other.time
     }
 }
 
-impl Eq for Event {}
+impl<T> Eq for Event<T> {}
 
-impl PartialOrd for Event {
-    fn partial_cmp(&self, other: &Event) -> Option<Ordering> {
+impl<T> PartialOrd for Event<T> {
+    fn partial_cmp(&self, other: &Event<T>) -> Option<Ordering> {
         self.time.partial_cmp(&other.time)
     }
 }
 
-impl Ord for Event {
-    fn cmp(&self, other: &Event) -> Ordering {
+impl<T> Ord for Event<T> {
+    fn cmp(&self, other: &Event<T>) -> Ordering {
         match self.time.partial_cmp(&other.time) {
             Some(o) => o,
             None => panic!("Event time was uncomparable. Maybe a NaN"),
@@ -504,7 +507,7 @@ mod tests {
                 yield Effect::TimeOut(a);
             }
         }));
-        s.schedule_event(0.0, p);
+        s.schedule_event(0.0, p, Effect::TimeOut(0.));
         s.step();
         s.step();
         assert_eq!(s.time(), 1.0);
@@ -528,7 +531,7 @@ mod tests {
                 yield Effect::TimeOut(tik);
             }
         }));
-        s.schedule_event(0.0, p);
+        s.schedule_event(0.0, p, Effect::TimeOut(0.));
         let s = s.run(EndCondition::Time(10.0));
         println!("{}", s.time());
         assert!(s.time() >= 10.0);
@@ -557,9 +560,9 @@ mod tests {
         }));
 
         // let p1 start immediately...
-        s.schedule_event(0.0, p1);
+        s.schedule_event(0.0, p1, Effect::TimeOut(0.));
         // let p2 start after 2 t.u., when r is not available
-        s.schedule_event(2.0, p2);
+        s.schedule_event(2.0, p2, Effect::TimeOut(2.));
         // p2 will wait r to be free (time 7.0) and its timeout
         // of 3.0 t.u. The simulation will end at time 10.0
 

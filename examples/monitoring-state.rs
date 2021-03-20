@@ -189,7 +189,12 @@ fn main() {
     let res = Resources { pip, et };
     for _ in 1..5 {
         let p = s.create_process(process_code(res));
-        s.schedule_event(0.0, p);
+        s.schedule_event(0.0, p, PCBState {
+	    pcb_id: 0,
+	    effect: Effect::TimeOut(0.),
+	    log: true,
+	    stage: PCBStage::Init,
+	});
     }
     s = s.run(EndCondition::Time(500.0));
     let evts = s.processed_events();

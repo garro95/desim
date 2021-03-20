@@ -32,9 +32,13 @@ fn main() {
         }
     }));
     // let p1 to start immediately...
-    s.schedule_event(0.0, p1);
+    s.schedule_event(0.0, p1, Effect::TimeOut(0.));
     // ...and p2 after 17 time units
-    s.schedule_event(17.0, p2);
+    s.schedule_event(17.0, p2, Effect::TimeOut(0.));
 
-    s.run(EndCondition::Time(100.0));
+    s = s.run(EndCondition::Time(100.0));
+
+    for e in s.processed_events().iter().map(|e| format!("{:?}", e)) {
+	println!("{}", e);
+    }
 }
