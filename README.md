@@ -1,5 +1,5 @@
 # desim
-
+[![crate](https://img.shields.io/crates/v/desim.svg)](https://crates.io/crates/desim)
 [![workflow status](https://img.shields.io/github/workflow/status/garro95/desim/Rust)](https://github.com/garro95/desim/actions/workflows/rust.yml)
 
 desim stands for Discrete-time Events SIMulator.
