@@ -1,4 +1,7 @@
 # desim
+
+[![workflow status](https://img.shields.io/github/workflow/status/garro95/desim/Rust)](https://github.com/garro95/desim/actions/workflows/rust.yml)
+
 desim stands for Discrete-time Events SIMulator.
 It aims to be a high quality, easy to use simulation framework for physical or
 logical systems that are based on processes that are triggered by events
@@ -31,7 +34,7 @@ for example scheduling events or requesting resources.
 
 For more information see the API documentation linked above.
 
-## Example
+## Examples
 The examples folder contains some simulations that use desim.
 You can build and run them with `cargo run --example <name>`.
 
