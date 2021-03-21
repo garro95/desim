@@ -12,11 +12,9 @@
 //be followed naturally using domain-specific notions.
 //
 #![feature(generators, generator_trait)]
-extern crate desim;
-extern crate rand;
-
 use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
-use rand::{Rng as RngT, XorShiftRng as Rng};
+use rand::{RngCore as RngT, SeedableRng};
+use rand::rngs::SmallRng as Rng;
 
 // PCBStage describes the stages through which a PCB passes as it is processed
 // in the system.
@@ -82,7 +80,7 @@ struct PCBStateCtx {
 impl PCBStateCtx {
     fn new(r: Resources) -> PCBStateCtx {
         PCBStateCtx {
-            rng: Rng::new_unseeded(),
+            rng: Rng::from_entropy(),
             res: r,
             state: PCBState {
                 pcb_id: 0,
@@ -191,7 +189,7 @@ fn main() {
         let p = s.create_process(process_code(res));
         s.schedule_event(0.0, p, PCBState {
 	    pcb_id: 0,
-	    effect: Effect::TimeOut(0.),
+	    effect: Effect::Event{time: 0., process: p},
 	    log: true,
 	    stage: PCBStage::Init,
 	});

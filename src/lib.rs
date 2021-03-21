@@ -126,7 +126,7 @@ use std::pin::Pin;
 ///
 pub trait SimState {
     fn get_effect(&self) -> Effect;
-    fn set_effect(&mut self, Effect);
+    fn set_effect(&mut self, effect: Effect);
     fn should_log(&self) -> bool;
 }
 
@@ -495,8 +495,7 @@ impl SimState for Effect {
 mod tests {
     #[test]
     fn it_works() {
-        use Effect;
-        use Simulation;
+        use crate::{Effect, Simulation};
 
         let mut s = Simulation::new();
         let p = s.create_process(Box::new(|_| {
@@ -519,9 +518,7 @@ mod tests {
 
     #[test]
     fn run() {
-        use Effect;
-        use EndCondition;
-        use Simulation;
+        use crate::{Effect, EndCondition, Simulation};
 
         let mut s = Simulation::new();
         let p = s.create_process(Box::new(|_| {
@@ -539,9 +536,7 @@ mod tests {
 
     #[test]
     fn resource() {
-        use Effect;
-        use EndCondition::NoEvents;
-        use Simulation;
+        use crate::{Effect, Simulation, EndCondition::NoEvents};
 
         let mut s = Simulation::new();
         let r = s.create_resource(1);

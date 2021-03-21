@@ -1,9 +1,6 @@
-//simulate the scheduling of two processes on one CPU
+// Simulate the scheduling of two processes on one CPU
 #![feature(generators, generator_trait)]
-extern crate desim;
-extern crate rand;
-
-use rand::{Rng as RngT, XorShiftRng as Rng};
+use rand::{RngCore as RngT, SeedableRng, rngs::SmallRng as Rng};
 
 use desim::{Effect, EndCondition, Simulation};
 
@@ -21,7 +18,7 @@ fn main() {
         }
     }));
     let p2 = s.create_process(Box::new(move |_| {
-        let mut rng = Rng::new_unseeded();
+        let mut rng = Rng::from_entropy();
         loop {
             // wait for the CPU
             yield Effect::Request(cpu);
