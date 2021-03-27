@@ -118,5 +118,5 @@ fn main() {
 	    _ => None,
 	}).fold((0.0, 0.0), |(t, c), t0| (t + t0, c + 1.0));
 
-    println!("The average waiting time was: {}", sum.0/sum.1)
+    println!("The average waiting time was: {}", sum.0/sum.1);
 }

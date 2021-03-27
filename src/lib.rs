@@ -162,10 +162,10 @@ pub type ResourceId = usize;
 pub type SimGen<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
 
 #[derive(Debug)]
-struct Resource {
+struct Resource<T> {
     allocated: usize,
     available: usize,
-    queue: VecDeque<ProcessId>,
+    queue: VecDeque<Event<T>>,
 }
 
 /// This struct provides the methods to create and run the simulation
@@ -182,7 +182,7 @@ pub struct Simulation<T: SimState + Clone> {
     processes: Vec<Option<Box<SimGen<T>>>>,
     future_events: BinaryHeap<Reverse<Event<T>>>,
     processed_events: Vec<(Event<T>, T)>,
-    resources: Vec<Resource>,
+    resources: Vec<Resource<T>>,
 }
 
 /// The Simulation Context is the argument used to resume the generator.
@@ -332,7 +332,7 @@ impl<T: SimState + Clone> Simulation<T> {
                                 let mut res = &mut self.resources[r];
                                 if res.available == 0 {
                                     // enqueue the process
-                                    res.queue.push_back(event.process);
+                                    res.queue.push_back(event);
                                 } else {
                                     // the process can use the resource immediately
                                     self.future_events.push(Reverse(Event {
@@ -346,16 +346,10 @@ impl<T: SimState + Clone> Simulation<T> {
                             Effect::Release(r) => {
                                 let res = &mut self.resources[r];
                                 match res.queue.pop_front() {
-                                    Some(p) =>
                                     // some processes in queue: schedule the next.
-                                    {
-					let mut y = y.clone();
-					y.set_effect(Effect::Request(r));
-                                        self.future_events.push(Reverse(Event {
-                                            time: self.time,
-                                            process: p,
-                                            state: y,
-                                        }))
+                                    Some(mut request_event) => {
+                                        request_event.time = self.time;
+                                        self.future_events.push(Reverse(request_event))
                                     }
                                     None => {
                                         assert!(res.available < res.allocated);
@@ -435,11 +429,11 @@ impl<T> SimContext<T> {
 
 impl<T> Event<T> {
     pub fn time(&self) -> f64 {
-	self.time
+        self.time
     }
 
     pub fn process(&self) -> ProcessId {
-	self.process
+        self.process
     }
 }
 
@@ -536,7 +530,7 @@ mod tests {
 
     #[test]
     fn resource() {
-        use crate::{Effect, Simulation, EndCondition::NoEvents};
+        use crate::{Effect, EndCondition::NoEvents, Simulation};
 
         let mut s = Simulation::new();
         let r = s.create_resource(1);
