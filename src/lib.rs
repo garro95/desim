@@ -162,7 +162,7 @@ pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
 /// The type of each `Process` generator
-pub type SimGen<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
+pub type Process<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
 
 /// This struct provides the methods to create and run the simulation
 /// in a single thread.
@@ -175,7 +175,7 @@ pub type SimGen<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpi
 pub struct Simulation<T: SimState + Clone> {
     time: f64,
     steps: usize,
-    processes: Vec<Option<Box<SimGen<T>>>>,
+    processes: Vec<Option<Box<Process<T>>>>,
     future_events: BinaryHeap<Reverse<Event<T>>>,
     processed_events: Vec<(Event<T>, T)>,
     resources: Vec<Box<dyn Resource<T>>>,

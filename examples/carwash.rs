@@ -10,7 +10,7 @@ use rand::{
 };
 use rand_distr::Exp;
 
-use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
+use desim::{Effect, EndCondition, ResourceId, Process, SimState, Simulation};
 use desim::resources::SimpleResource;
 use CarState::*;
 
@@ -62,7 +62,7 @@ fn car_process<'a>(
     rng: &'a mut Rng,
     distr_drive: &'a impl Distribution<f32>,
     distr_wash: &'a impl Distribution<f32>,
-) -> Box<SimGen<CarState>> {
+) -> Box<Process<CarState>> {
     // Generate random drive_time and wash_time at beginning
     let t_drive = distr_drive.sample(rng);
     let t_wash = distr_wash.sample(rng);

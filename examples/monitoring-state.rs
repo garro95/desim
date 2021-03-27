@@ -12,7 +12,7 @@
 //be followed naturally using domain-specific notions.
 //
 #![feature(generators, generator_trait)]
-use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
+use desim::{Effect, EndCondition, ResourceId, Process, SimState, Simulation};
 use desim::resources::SimpleResource;
 use rand::rngs::SmallRng as Rng;
 use rand::{RngCore as RngT, SeedableRng};
@@ -156,7 +156,7 @@ impl PCBStateCtx {
     }
 }
 
-fn process_code(r: Resources) -> Box<SimGen<PCBState>> {
+fn process_code(r: Resources) -> Box<Process<PCBState>> {
     Box::new(move |_| {
         let mut current_pcb_id = 0;
         let mut ctx = PCBStateCtx::new(r);
