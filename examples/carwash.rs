@@ -1,7 +1,7 @@
 // Simulate cars arriving and being served at a carwash
 #![feature(generators, generator_trait)]
-use std::fmt::{Display, Formatter, Result};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter, Result};
 
 use rand::{
     distributions::{Distribution, Uniform},
@@ -66,13 +66,13 @@ fn car_process<'a>(
     let t_drive = distr_drive.sample(rng);
     let t_wash = distr_wash.sample(rng);
     Box::new(move |_| {
-	// The car drives for `t_drive` time
+        // The car drives for `t_drive` time
         yield Drive(t_drive);
-	// Arrives at carwash and waits for a machine to be free
+        // Arrives at carwash and waits for a machine to be free
         yield WaitMachine(carwash);
-	// The car wash for `t_wash` time, keeping the carwash machine (resource) occupied
+        // The car wash for `t_wash` time, keeping the carwash machine (resource) occupied
         yield Wash(t_wash);
-	// The car leaves the carwash, freeing the resource
+        // The car leaves the carwash, freeing the resource
         yield Leave(carwash);
     })
 }
@@ -107,16 +107,18 @@ fn main() {
     // Compute average waiting time
     let mut wait_start_time = HashMap::new();
 
-    let sum: (f64, f64) = sim.processed_events()
+    let sum: (f64, f64) = sim
+        .processed_events()
         .iter()
         .filter_map(|(e, state)| match state {
-	    WaitMachine(_) => {
-		wait_start_time.insert(e.process(), e.time());
-		None
-	    },
-	    Wash(_) => Some(e.time() - wait_start_time.remove(&e.process()).unwrap()),
-	    _ => None,
-	}).fold((0.0, 0.0), |(t, c), t0| (t + t0, c + 1.0));
+            WaitMachine(_) => {
+                wait_start_time.insert(e.process(), e.time());
+                None
+            }
+            Wash(_) => Some(e.time() - wait_start_time.remove(&e.process()).unwrap()),
+            _ => None,
+        })
+        .fold((0.0, 0.0), |(t, c), t0| (t + t0, c + 1.0));
 
-    println!("The average waiting time was: {}", sum.0/sum.1);
+    println!("The average waiting time was: {}", sum.0 / sum.1);
 }

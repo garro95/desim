@@ -71,7 +71,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
 #![feature(generators, generator_trait)]
 use std::cmp::{Ordering, Reverse};
-use std::collections::{BinaryHeap};
+use std::collections::BinaryHeap;
 use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
 
@@ -322,25 +322,27 @@ impl<T: SimState + Clone> Simulation<T> {
                             }
                             Effect::Request(r) => {
                                 let res = &mut self.resources[r];
-				let request_event = Event {
+                                let request_event = Event {
                                     time: self.time,
                                     process: event.process,
                                     state: y,
                                 };
-				if let Some(e) = res.allocate_or_enqueue(request_event) {
-				    self.future_events.push(Reverse(e))
-				}
+                                if let Some(e) = res.allocate_or_enqueue(request_event) {
+                                    self.future_events.push(Reverse(e))
+                                }
                             }
                             Effect::Release(r) => {
                                 let res = &mut self.resources[r];
-				let release_event = Event {
-				    time: self.time,
-				    process: event.process,
-				    state: y
-				};
-				if let Some(e) = res.release_and_schedule_next(release_event.clone()) {
-				    self.future_events.push(Reverse(e))
-				}
+                                let release_event = Event {
+                                    time: self.time,
+                                    process: event.process,
+                                    state: y,
+                                };
+                                if let Some(e) =
+                                    res.release_and_schedule_next(release_event.clone())
+                                {
+                                    self.future_events.push(Reverse(e))
+                                }
                                 // after releasing the resource the process
                                 // can be resumed
                                 self.future_events.push(Reverse(release_event));
