@@ -48,5 +48,10 @@ basis of a proprietary one. Improvements of this work or simulation software
 written using desim as a library should be free software as well.
 
 ## Changes
+* 0.3.0 Allow the definition of custom Resource types.  
+   WARNING: contains breaking changes: 
+   - `SimGen` has been renamed to `Process`
+   - `Resource` is now a trait and the `create_resource` method has been updated to take in input a `Box<dyn Resource<T>>`
+   - The old resource type can still be used creating an instance of `SimpleResource`
 * 0.2.0 With generators resume arguments support, add a Simulation Context that is passed to processes on resume and can be used to retrieve the simulation time or the event that caused the generator to resume
 * 0.1.0 First release
