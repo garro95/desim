@@ -1,6 +1,7 @@
 // Simulate cars arriving and being served at a carwash
 #![feature(generators, generator_trait)]
 use std::fmt::{Display, Formatter, Result};
+use std::collections::HashMap;
 
 use rand::{
     distributions::{Distribution, Uniform},
@@ -102,4 +103,20 @@ fn main() {
     for (e, state) in sim.processed_events() {
         println!("{}\t{}", e.time(), state);
     }
+
+    // Compute average waiting time
+    let mut wait_start_time = HashMap::new();
+
+    let sum: (f64, f64) = sim.processed_events()
+        .iter()
+        .filter_map(|(e, state)| match state {
+	    WaitMachine(_) => {
+		wait_start_time.insert(e.process(), e.time());
+		None
+	    },
+	    Wash(_) => Some(e.time() - wait_start_time.get(&e.process()).unwrap()),
+	    _ => None,
+	}).fold((0.0, 0.0), |(t, c), t0| (t + t0, c + 1.0));
+
+    println!("The average waiting time was: {}", sum.0/sum.1)
 }
