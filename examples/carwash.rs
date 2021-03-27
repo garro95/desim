@@ -114,7 +114,7 @@ fn main() {
 		wait_start_time.insert(e.process(), e.time());
 		None
 	    },
-	    Wash(_) => Some(e.time() - wait_start_time.get(&e.process()).unwrap()),
+	    Wash(_) => Some(e.time() - wait_start_time.remove(&e.process()).unwrap()),
 	    _ => None,
 	}).fold((0.0, 0.0), |(t, c), t0| (t + t0, c + 1.0));
 
