@@ -178,7 +178,7 @@ pub struct Simulation<T: SimState + Clone> {
     processes: Vec<Option<Box<SimGen<T>>>>,
     future_events: BinaryHeap<Reverse<Event<T>>>,
     processed_events: Vec<(Event<T>, T)>,
-    resources: Vec<SimpleResource<T>>,
+    resources: Vec<Box<dyn Resource<T>>>,
 }
 
 /// The Simulation Context is the argument used to resume the generator.
@@ -217,7 +217,7 @@ pub enum EndCondition {
     NSteps(usize),
 }
 
-impl<T: SimState + Clone> Simulation<T> {
+impl<T: 'static + SimState + Clone> Simulation<T> {
     /// Create a new `Simulation` environment.
     pub fn new() -> Simulation<T> {
         Simulation::<T>::default()
@@ -254,7 +254,7 @@ impl<T: SimState + Clone> Simulation<T> {
     /// Returns the identifier of the resource
     pub fn create_resource(&mut self, n: usize) -> ResourceId {
         let id = self.resources.len();
-        self.resources.push(SimpleResource::new(n));
+        self.resources.push(Box::new(SimpleResource::new(n)));
         id
     }
 
