@@ -3,10 +3,11 @@
 use rand::{rngs::SmallRng as Rng, RngCore as RngT, SeedableRng};
 
 use desim::{Effect, EndCondition, Simulation};
+use desim::resources::SimpleResource;
 
 fn main() {
     let mut s = Simulation::new();
-    let cpu = s.create_resource(1);
+    let cpu = s.create_resource(Box::new(SimpleResource::new(1)));
     let p1 = s.create_process(Box::new(move |_| {
         for _ in 0..10 {
             // wait for the cpu to be available

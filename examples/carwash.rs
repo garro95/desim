@@ -11,6 +11,7 @@ use rand::{
 use rand_distr::Exp;
 
 use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
+use desim::resources::SimpleResource;
 use CarState::*;
 
 const NUM_MACHINES: usize = 4; // A carwash with 4 machines to wash cars
@@ -82,7 +83,7 @@ fn main() {
     let mut sim = Simulation::new();
 
     // Create the carwash resource: It contains `NUM_MACHINES` machines to wash cars`
-    let carwash = sim.create_resource(NUM_MACHINES);
+    let carwash = sim.create_resource(Box::new(SimpleResource::new(NUM_MACHINES)));
 
     // Create random number genrator and some distributions
     let mut rng = Rng::from_entropy();

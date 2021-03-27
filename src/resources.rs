@@ -15,6 +15,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 use crate::Event;
 use std::collections::VecDeque;
 
+/// A simple resource that is allocated based on a first come first served policy.
+/// When there are no more instances of the resource available, the processes are enqueued in a
+/// fifo and triggered as soon as an instance is released.
 #[derive(Debug)]
 pub struct SimpleResource<T> {
     quantity: usize,
@@ -22,6 +25,7 @@ pub struct SimpleResource<T> {
     queue: VecDeque<Event<T>>,
 }
 
+///
 pub trait Resource<T> {
     fn allocate_or_enqueue(&mut self, event: Event<T>) -> Option<Event<T>>;
     fn release_and_schedule_next(&mut self, event: Event<T>) -> Option<Event<T>>;

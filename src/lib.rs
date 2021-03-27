@@ -75,8 +75,8 @@ use std::collections::BinaryHeap;
 use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
 
-mod resources;
-pub use resources::{Resource, SimpleResource};
+pub mod resources;
+use resources::Resource;
 
 /// Data structures implementing this trait can be yielded from the generator
 /// associated with a `Process`. This allows attaching application-specific data
@@ -252,9 +252,9 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// For more information about a resource, see the crate level documentation
     ///
     /// Returns the identifier of the resource
-    pub fn create_resource(&mut self, n: usize) -> ResourceId {
+    pub fn create_resource(&mut self, resource: Box<dyn Resource<T>>) -> ResourceId {
         let id = self.resources.len();
-        self.resources.push(Box::new(SimpleResource::new(n)));
+        self.resources.push(resource);
         id
     }
 
@@ -514,9 +514,10 @@ mod tests {
     #[test]
     fn resource() {
         use crate::{Effect, EndCondition::NoEvents, Simulation};
+	use crate::resources::SimpleResource;
 
         let mut s = Simulation::new();
-        let r = s.create_resource(1);
+        let r = s.create_resource(Box::new(SimpleResource::new(1)));
 
         // simple process that lock the resource for 7 time units
         let p1 = s.create_process(Box::new(move |_| {

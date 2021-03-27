@@ -13,6 +13,7 @@
 //
 #![feature(generators, generator_trait)]
 use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
+use desim::resources::SimpleResource;
 use rand::rngs::SmallRng as Rng;
 use rand::{RngCore as RngT, SeedableRng};
 
@@ -182,8 +183,8 @@ fn process_code(r: Resources) -> Box<SimGen<PCBState>> {
 
 fn main() {
     let mut s = Simulation::new();
-    let pip = s.create_resource(1);
-    let et = s.create_resource(1);
+    let pip = s.create_resource(Box::new(SimpleResource::new(1)));
+    let et = s.create_resource(Box::new(SimpleResource::new(1)));
     let res = Resources { pip, et };
     for _ in 1..5 {
         let p = s.create_process(process_code(res));
