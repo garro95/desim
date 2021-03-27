@@ -2,8 +2,8 @@
 #![feature(generators, generator_trait)]
 use rand::{rngs::SmallRng as Rng, RngCore as RngT, SeedableRng};
 
-use desim::{Effect, EndCondition, Simulation};
 use desim::resources::SimpleResource;
+use desim::{Effect, EndCondition, Simulation};
 
 fn main() {
     let mut s = Simulation::new();

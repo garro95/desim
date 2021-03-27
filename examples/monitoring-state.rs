@@ -12,8 +12,8 @@
 //be followed naturally using domain-specific notions.
 //
 #![feature(generators, generator_trait)]
-use desim::{Effect, EndCondition, ResourceId, Process, SimState, Simulation};
 use desim::resources::SimpleResource;
+use desim::{Effect, EndCondition, Process, ResourceId, SimState, Simulation};
 use rand::rngs::SmallRng as Rng;
 use rand::{RngCore as RngT, SeedableRng};
 

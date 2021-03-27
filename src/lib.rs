@@ -513,8 +513,8 @@ mod tests {
 
     #[test]
     fn resource() {
+        use crate::resources::SimpleResource;
         use crate::{Effect, EndCondition::NoEvents, Simulation};
-	use crate::resources::SimpleResource;
 
         let mut s = Simulation::new();
         let r = s.create_resource(Box::new(SimpleResource::new(1)));
