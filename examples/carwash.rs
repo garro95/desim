@@ -61,7 +61,7 @@ fn car_process<'a>(
     distr_drive: &'a impl Distribution<f32>,
     distr_wash: &'a impl Distribution<f32>,
 ) -> Box<SimGen<CarState>> {
-    // Generate random dive_time and wash_time at beginning
+    // Generate random drive_time and wash_time at beginning
     let t_drive = distr_drive.sample(rng);
     let t_wash = distr_wash.sample(rng);
     Box::new(move |_| {
