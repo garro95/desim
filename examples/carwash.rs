@@ -54,38 +54,51 @@ impl Display for CarState {
     }
 }
 
+// Create a car process
 fn car_process<'a>(
     carwash: ResourceId,
     rng: &'a mut Rng,
     distr_drive: &'a impl Distribution<f32>,
     distr_wash: &'a impl Distribution<f32>,
 ) -> Box<SimGen<CarState>> {
+    // Generate random dive_time and wash_time at beginning
     let t_drive = distr_drive.sample(rng);
     let t_wash = distr_wash.sample(rng);
     Box::new(move |_| {
+	// The car drives for `t_drive` time
         yield Drive(t_drive);
+	// Arrives at carwash and waits for a machine to be free
         yield WaitMachine(carwash);
+	// The car wash for `t_wash` time, keeping the carwash machine (resource) occupied
         yield Wash(t_wash);
+	// The car leaves the carwash, freeing the resource
         yield Leave(carwash);
     })
 }
 
 fn main() {
+    // Create a new simulation
     let mut sim = Simulation::new();
 
+    // Create the carwash resource: It contains `NUM_MACHINES` machines to wash cars`
     let carwash = sim.create_resource(NUM_MACHINES);
+
+    // Create random number genrator and some distributions
     let mut rng = Rng::from_entropy();
     let unif = Uniform::new(0.0, SIM_TIME);
     let distr_drive = Exp::new(1.0 / LAMBDA_DRIVE).unwrap();
     let distr_wash = Exp::new(1.0 / LAMBDA_WASH).unwrap();
 
+    // Create NUM_CARS car processes and schedule them at random times
     for t in unif.sample_iter(rng.clone()).take(NUM_CARS) {
         let p = sim.create_process(car_process(carwash, &mut rng, &distr_drive, &distr_wash));
         sim.schedule_event(t, p, CarState::Drive(0.0));
     }
 
+    // Run the simulation until all cars have been washed
     sim = sim.run(EndCondition::NoEvents);
 
+    // Print the simulation log
     for (e, state) in sim.processed_events() {
         println!("{}\t{}", e.time(), state);
     }
