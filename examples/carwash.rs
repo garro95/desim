@@ -6,12 +6,12 @@ use std::fmt::{Display, Formatter, Result};
 use rand::{
     distributions::{Distribution, Uniform},
     rngs::SmallRng as Rng,
-    Rng as RngT, SeedableRng,
+    SeedableRng,
 };
 use rand_distr::Exp;
 
-use desim::{Effect, EndCondition, ResourceId, Process, SimState, Simulation};
 use desim::resources::SimpleResource;
+use desim::{Effect, EndCondition, Process, ResourceId, SimState, Simulation};
 use CarState::*;
 
 const NUM_MACHINES: usize = 4; // A carwash with 4 machines to wash cars
