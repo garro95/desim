@@ -1,6 +1,6 @@
 // Simulate the scheduling of two processes on one CPU
 #![feature(generators, generator_trait)]
-use rand::{RngCore as RngT, SeedableRng, rngs::SmallRng as Rng};
+use rand::{rngs::SmallRng as Rng, RngCore as RngT, SeedableRng};
 
 use desim::{Effect, EndCondition, Simulation};
 
@@ -36,6 +36,6 @@ fn main() {
     s = s.run(EndCondition::Time(100.0));
 
     for e in s.processed_events().iter().map(|e| format!("{:?}", e)) {
-	println!("{}", e);
+        println!("{}", e);
     }
 }

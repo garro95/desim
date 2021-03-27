@@ -13,8 +13,8 @@
 //
 #![feature(generators, generator_trait)]
 use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
-use rand::{RngCore as RngT, SeedableRng};
 use rand::rngs::SmallRng as Rng;
+use rand::{RngCore as RngT, SeedableRng};
 
 // PCBStage describes the stages through which a PCB passes as it is processed
 // in the system.
@@ -187,12 +187,19 @@ fn main() {
     let res = Resources { pip, et };
     for _ in 1..5 {
         let p = s.create_process(process_code(res));
-        s.schedule_event(0.0, p, PCBState {
-	    pcb_id: 0,
-	    effect: Effect::Event{time: 0., process: p},
-	    log: true,
-	    stage: PCBStage::Init,
-	});
+        s.schedule_event(
+            0.0,
+            p,
+            PCBState {
+                pcb_id: 0,
+                effect: Effect::Event {
+                    time: 0.,
+                    process: p,
+                },
+                log: true,
+                stage: PCBStage::Init,
+            },
+        );
     }
     s = s.run(EndCondition::Time(500.0));
     let evts = s.processed_events();
@@ -200,7 +207,11 @@ fn main() {
     for (ev, state) in evts {
         println!(
             "{:?}: id({},{}) {:?}, {:?}",
-            ev.time(), ev.process(), state.pcb_id, state.effect, state.stage
+            ev.time(),
+            ev.process(),
+            state.pcb_id,
+            state.effect,
+            state.stage
         );
     }
 }
