@@ -71,9 +71,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
 #![feature(generators, generator_trait)]
 use std::cmp::{Ordering, Reverse};
-use std::collections::{BinaryHeap, VecDeque};
+use std::collections::{BinaryHeap};
 use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
+
+mod resources;
+pub use resources::{Resource, SimpleResource};
 
 /// Data structures implementing this trait can be yielded from the generator
 /// associated with a `Process`. This allows attaching application-specific data
@@ -161,13 +164,6 @@ pub type ResourceId = usize;
 /// The type of each `Process` generator
 pub type SimGen<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
 
-#[derive(Debug)]
-struct Resource<T> {
-    allocated: usize,
-    available: usize,
-    queue: VecDeque<Event<T>>,
-}
-
 /// This struct provides the methods to create and run the simulation
 /// in a single thread.
 ///
@@ -182,7 +178,7 @@ pub struct Simulation<T: SimState + Clone> {
     processes: Vec<Option<Box<SimGen<T>>>>,
     future_events: BinaryHeap<Reverse<Event<T>>>,
     processed_events: Vec<(Event<T>, T)>,
-    resources: Vec<Resource<T>>,
+    resources: Vec<SimpleResource<T>>,
 }
 
 /// The Simulation Context is the argument used to resume the generator.
@@ -258,11 +254,7 @@ impl<T: SimState + Clone> Simulation<T> {
     /// Returns the identifier of the resource
     pub fn create_resource(&mut self, n: usize) -> ResourceId {
         let id = self.resources.len();
-        self.resources.push(Resource {
-            allocated: n,
-            available: n,
-            queue: VecDeque::new(),
-        });
+        self.resources.push(SimpleResource::new(n));
         id
     }
 
@@ -329,40 +321,29 @@ impl<T: SimState + Clone> Simulation<T> {
                                 self.future_events.push(Reverse(e))
                             }
                             Effect::Request(r) => {
-                                let mut res = &mut self.resources[r];
-                                if res.available == 0 {
-                                    // enqueue the process
-                                    res.queue.push_back(event);
-                                } else {
-                                    // the process can use the resource immediately
-                                    self.future_events.push(Reverse(Event {
-                                        time: self.time,
-                                        process: event.process,
-                                        state: y,
-                                    }));
-                                    res.available -= 1;
-                                }
-                            }
-                            Effect::Release(r) => {
                                 let res = &mut self.resources[r];
-                                match res.queue.pop_front() {
-                                    // some processes in queue: schedule the next.
-                                    Some(mut request_event) => {
-                                        request_event.time = self.time;
-                                        self.future_events.push(Reverse(request_event))
-                                    }
-                                    None => {
-                                        assert!(res.available < res.allocated);
-                                        res.available += 1;
-                                    }
-                                }
-                                // after releasing the resource the process
-                                // can be resumed
-                                self.future_events.push(Reverse(Event {
+				let request_event = Event {
                                     time: self.time,
                                     process: event.process,
                                     state: y,
-                                }))
+                                };
+				if let Some(e) = res.allocate_or_enqueue(request_event) {
+				    self.future_events.push(Reverse(e))
+				}
+                            }
+                            Effect::Release(r) => {
+                                let res = &mut self.resources[r];
+				let release_event = Event {
+				    time: self.time,
+				    process: event.process,
+				    state: y
+				};
+				if let Some(e) = res.release_and_schedule_next(release_event.clone()) {
+				    self.future_events.push(Reverse(e))
+				}
+                                // after releasing the resource the process
+                                // can be resumed
+                                self.future_events.push(Reverse(release_event));
                             }
                             Effect::Wait => {}
                             Effect::Trace => {
