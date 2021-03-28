@@ -248,7 +248,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// Create a new resource.
     ///
     /// For more information about a resource, see the crate level documentation
-    /// and the documentation of the [`resources`](crate::resources)
+    /// and the documentation of the [`resources`](crate::resources) module.
     ///
     /// Returns the identifier of the resource
     pub fn create_resource(&mut self, resource: Box<dyn Resource<T>>) -> ResourceId {
@@ -410,12 +410,39 @@ impl<T> SimContext<T> {
 }
 
 impl<T> Event<T> {
+    pub fn new(time: f64, process: ProcessId, state: T) -> Event<T> {
+        Event {
+            time,
+            process,
+            state,
+        }
+    }
     pub fn time(&self) -> f64 {
         self.time
     }
-
+    pub fn set_time(&mut self, time: f64) {
+        self.time = time;
+    }
     pub fn process(&self) -> ProcessId {
         self.process
+    }
+    pub fn set_process(&mut self, process: ProcessId) {
+        self.process = process;
+    }
+    pub fn state(&self) -> &T {
+        &self.state
+    }
+    pub fn set_state(&mut self, state: T) {
+        self.state = state;
+    }
+}
+
+impl<T: SimState> Event<T> {
+    pub fn effect(&self) -> Effect {
+        self.state.get_effect()
+    }
+    pub fn set_effect(&mut self, effect: Effect) {
+        self.state.set_effect(effect)
     }
 }
 

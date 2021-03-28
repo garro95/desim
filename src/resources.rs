@@ -61,7 +61,7 @@ impl<T> Resource<T> for SimpleResource<T> {
     fn release_and_schedule_next(&mut self, event: Event<T>) -> Option<Event<T>> {
         match self.queue.pop_front() {
             Some(mut request_event) => {
-                request_event.time = event.time();
+                request_event.set_time(event.time());
                 Some(request_event)
             }
             None => {
