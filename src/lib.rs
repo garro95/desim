@@ -19,6 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! crate will use stable. Generators will be the only nightly feature
 //! used in this crate.
 //!
+//! The examples directory in this repository contains full usage examples
+//! of the desim crate as a simulation framework.
+//!
 //! # Simulation
 //! A simulation is performed scheduling one or more processes that
 //! models the environment you are going to simulate. Your model may
@@ -29,7 +32,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! the `step()` method, or all at once, with `run()`, until and ending
 //! condition is met.
 //!
-//! The simulation will generate a log of all the events.
+//! The simulation will generate a log of all the events with a state that
+//! returns `true` to `should_log`.
 //!
 /*
 //! `nonblocking_run` lets you run the simulation in another thread
@@ -152,6 +156,7 @@ pub enum Effect {
     Release(ResourceId),
     /// Keep the process' state until it is resumed by another event.
     Wait,
+    /// Logs the event and resume the process immediately.
     Trace,
 }
 
