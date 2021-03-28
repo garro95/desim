@@ -262,11 +262,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// yielding `Effect::Event` from a process during the simulation.
     // TODO: Review this API
     pub fn schedule_event(&mut self, time: f64, process: ProcessId, state: T) {
-        self.future_events.push(Reverse(Event {
-            time,
-            process,
-            state,
-        }));
+        self.future_events.push(Reverse(Event::new(time, process, state)));
     }
 
     fn log_processed_event(&mut self, event: &Event<T>, sim_state: T) {
@@ -280,7 +276,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
         self.steps += 1;
         match self.future_events.pop() {
             Some(Reverse(event)) => {
-                self.time = event.time;
+                self.time = event.time();
                 let gstatepin = Pin::new(
                     self.processes[event.process]
                         .as_mut()
@@ -288,7 +284,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                 )
                 .resume(SimContext {
                     time: self.time,
-                    state: event.state.clone(),
+                    state: event.state().clone(),
                 });
                 // log event
                 // logging needs to happen before the processing because processing
@@ -308,35 +304,23 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                         match effect {
                             Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                                 time: self.time + t,
-                                process: event.process,
+                                process: event.process(),
                                 state: y,
                             })),
                             Effect::Event { time, process } => {
-                                let e = Event {
-                                    time: time + self.time,
-                                    process,
-                                    state: y,
-                                };
+                                let e = Event::new(time + self.time, process, y);
                                 self.future_events.push(Reverse(e))
                             }
                             Effect::Request(r) => {
                                 let res = &mut self.resources[r];
-                                let request_event = Event {
-                                    time: self.time,
-                                    process: event.process,
-                                    state: y,
-                                };
+                                let request_event = Event::new(self.time, event.process(), y);
                                 if let Some(e) = res.allocate_or_enqueue(request_event) {
                                     self.future_events.push(Reverse(e))
                                 }
                             }
                             Effect::Release(r) => {
                                 let res = &mut self.resources[r];
-                                let release_event = Event {
-                                    time: self.time,
-                                    process: event.process,
-                                    state: y,
-                                };
+                                let release_event = Event::new(self.time, event.process(), y);
                                 if let Some(e) =
                                     res.release_and_schedule_next(release_event.clone())
                                 {
@@ -349,12 +333,9 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                             Effect::Wait => {}
                             Effect::Trace => {
                                 // this event is only for tracing, reschedule
-                                // immediately
-                                self.future_events.push(Reverse(Event {
-                                    time: self.time,
-                                    process: event.process,
-                                    state: y,
-                                }))
+                                // immediately'
+				let e = Event::new(self.time, event.process(), y);
+                                self.future_events.push(Reverse(e));
                             }
                         }
                     }
@@ -364,7 +345,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                         // waste of space since it is completed.
                         // May be worth to use another data structure.
                         // At least let's remove the generator itself.
-                        self.processes[event.process].take();
+                        self.processes[event.process()].take();
                     }
                 }
             }
