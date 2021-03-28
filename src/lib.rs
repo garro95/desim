@@ -53,21 +53,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //!
 //!
 //! # Resource
-//! A resource is a finite amount of entities that can be used by one process
-//! a time. When all the instances of the resource of interest are being used by
-//! a process, the requiring one is enqueued in a FIFO and is resumed when the
-//! resource become available again. When the process does not need the resource
-//! anymore, it must release it.
+//! A resource is a finite amount of entities, eachone of which can be used by one process
+//! a time. When the process does not need the resource anymore, it must release it.
 //!
 //! A resource can be created in the simulation using the `create_resource`
-//! method, which requires the amount of resource and returns an identifier
+//! method, which requires the resource to add to the simulation and returns an identifier
 //! for that resource that can be used to require and release it.
 //!
 //! A resource can be required and reelased by a process yielding
 //! the corresponding `Effect`. There is no check on the fact that a process
-//! yielding `Release` was holding a resource with that ID, but if a resource
-//! gets more release then requests, the simulation will panic.
+//! yielding `Release` was holding a resource with that ID.
 //!
+//! For more information about the `Resource` trait and the `SimpleResource` implementation,
+//! see the [`resources`](crate::resources) module.
 
 #![feature(generators, generator_trait)]
 use std::cmp::{Ordering, Reverse};
@@ -247,9 +245,10 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
         id
     }
 
-    /// Create a new finite resource, of which n instancies are available.
+    /// Create a new resource.
     ///
     /// For more information about a resource, see the crate level documentation
+    /// and the documentation of the [`resources`](crate::resources)
     ///
     /// Returns the identifier of the resource
     pub fn create_resource(&mut self, resource: Box<dyn Resource<T>>) -> ResourceId {
