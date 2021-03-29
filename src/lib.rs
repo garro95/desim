@@ -418,6 +418,9 @@ impl<T> Event<T> {
     pub fn state(&self) -> &T {
         &self.state
     }
+    pub fn state_mut(&mut self) -> &mut T {
+	&mut self.state
+    }
     pub fn set_state(&mut self, state: T) {
         self.state = state;
     }
