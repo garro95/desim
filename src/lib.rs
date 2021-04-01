@@ -78,6 +78,7 @@ use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
 
 pub mod resources;
+pub mod prelude;
 use resources::Resource;
 
 /// Data structures implementing this trait can be yielded from the generator
