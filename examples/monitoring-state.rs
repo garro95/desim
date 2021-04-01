@@ -13,7 +13,7 @@
 //
 #![feature(generators, generator_trait)]
 use desim::resources::SimpleResource;
-use desim::{Effect, EndCondition, Process, ResourceId, SimState, Simulation};
+use desim::prelude::*;
 use rand::rngs::SmallRng as Rng;
 use rand::{RngCore as RngT, SeedableRng};
 
