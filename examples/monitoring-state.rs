@@ -1,15 +1,15 @@
-//This example shows a simulation for a conveyor belt from where raw PCBs are
-//processed in stages (each stage adding a particular type of component, and the
-//conveyor belt stopping while an item is being processed). After each step, if
-//the item hasn't reached its final stage, it rejoins the back of the queue
-//waiting to be processed again.
-//
-//Sometimes, similar situations appear in software when processing elements
-//using event loops.
-//
-//This example is also meant to show how you can develop an application-specific
-//API so that the code written inside the process generator is simple and can
-//be followed naturally using domain-specific notions.
+// This example shows a simulation for a conveyor belt from where raw PCBs are
+// processed in stages (each stage adding a particular type of component, and the
+// conveyor belt stopping while an item is being processed). After each step, if
+// the item hasn't reached its final stage, it rejoins the back of the queue
+// waiting to be processed again.
+// 
+// Sometimes, similar situations appear in software when processing elements
+// using event loops.
+// 
+// This example is also meant to show how you can develop an application-specific
+// API so that the code written inside the process generator is simple and can
+// be followed naturally using domain-specific notions.
 //
 #![feature(generators, generator_trait)]
 use desim::resources::SimpleResource;

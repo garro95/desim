@@ -1,4 +1,10 @@
-// Simulate cars arriving and being served at a carwash
+//! Simulate cars arriving and being served at a carwash
+//!
+//! Features shown in this example:
+//! * Custom state
+//! * Simple Resource
+//! * prelude
+
 #![feature(generators, generator_trait)]
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
@@ -11,7 +17,7 @@ use rand::{
 use rand_distr::Exp;
 
 use desim::resources::SimpleResource;
-use desim::{Effect, EndCondition, Process, ResourceId, SimState, Simulation};
+use desim::prelude::*;
 use CarState::*;
 
 const NUM_MACHINES: usize = 4; // A carwash with 4 machines to wash cars

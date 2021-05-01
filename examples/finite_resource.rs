@@ -1,3 +1,26 @@
+/* Copyright © 2021 Gianmarco Garrisi
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>. */
+
+//! This example shows how to create a custom resource and implement the resource trait.
+//!
+//! Features shown in this example:
+//! * Custom Resources
+//! * Prelude
+//! * Custom state
+//! * EndCondition::NoEvents
+
 #![feature(generators)]
 
 use desim::prelude::*;
@@ -106,7 +129,7 @@ fn main() {
     };
     let res = sim.create_resource(Box::new(res));
 
-    // Create NUM_CLIENTS car processes and schedule them at random times
+    // Create NUM_CLIENTS processes and schedule them at random times
     for t in unif.sample_iter(rng).take(NUM_CLIENTS) {
         let p = sim.create_process(client_process(res));
         sim.schedule_event(t, p, State::new(Effect::TimeOut(0.0)));
