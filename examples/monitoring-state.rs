@@ -1,18 +1,19 @@
-//This example shows a simulation for a conveyor belt from where raw PCBs are
-//processed in stages (each stage adding a particular type of component, and the
-//conveyor belt stopping while an item is being processed). After each step, if
-//the item hasn't reached its final stage, it rejoins the back of the queue
-//waiting to be processed again.
-//
-//Sometimes, similar situations appear in software when processing elements
-//using event loops.
-//
-//This example is also meant to show how you can develop an application-specific
-//API so that the code written inside the process generator is simple and can
-//be followed naturally using domain-specific notions.
+// This example shows a simulation for a conveyor belt from where raw PCBs are
+// processed in stages (each stage adding a particular type of component, and the
+// conveyor belt stopping while an item is being processed). After each step, if
+// the item hasn't reached its final stage, it rejoins the back of the queue
+// waiting to be processed again.
+// 
+// Sometimes, similar situations appear in software when processing elements
+// using event loops.
+// 
+// This example is also meant to show how you can develop an application-specific
+// API so that the code written inside the process generator is simple and can
+// be followed naturally using domain-specific notions.
 //
 #![feature(generators, generator_trait)]
-use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
+use desim::resources::SimpleResource;
+use desim::prelude::*;
 use rand::rngs::SmallRng as Rng;
 use rand::{RngCore as RngT, SeedableRng};
 
@@ -155,7 +156,7 @@ impl PCBStateCtx {
     }
 }
 
-fn process_code(r: Resources) -> Box<SimGen<PCBState>> {
+fn process_code(r: Resources) -> Box<Process<PCBState>> {
     Box::new(move |_| {
         let mut current_pcb_id = 0;
         let mut ctx = PCBStateCtx::new(r);
@@ -182,8 +183,8 @@ fn process_code(r: Resources) -> Box<SimGen<PCBState>> {
 
 fn main() {
     let mut s = Simulation::new();
-    let pip = s.create_resource(1);
-    let et = s.create_resource(1);
+    let pip = s.create_resource(Box::new(SimpleResource::new(1)));
+    let et = s.create_resource(Box::new(SimpleResource::new(1)));
     let res = Resources { pip, et };
     for _ in 1..5 {
         let p = s.create_process(process_code(res));

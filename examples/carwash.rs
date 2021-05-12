@@ -1,16 +1,23 @@
-// Simulate cars arriving and being served at a carwash
+//! Simulate cars arriving and being served at a carwash
+//!
+//! Features shown in this example:
+//! * Custom state
+//! * Simple Resource
+//! * prelude
+
 #![feature(generators, generator_trait)]
-use std::fmt::{Display, Formatter, Result};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter, Result};
 
 use rand::{
     distributions::{Distribution, Uniform},
     rngs::SmallRng as Rng,
-    Rng as RngT, SeedableRng,
+    SeedableRng,
 };
 use rand_distr::Exp;
 
-use desim::{Effect, EndCondition, ResourceId, SimGen, SimState, Simulation};
+use desim::resources::SimpleResource;
+use desim::prelude::*;
 use CarState::*;
 
 const NUM_MACHINES: usize = 4; // A carwash with 4 machines to wash cars
@@ -61,18 +68,18 @@ fn car_process<'a>(
     rng: &'a mut Rng,
     distr_drive: &'a impl Distribution<f32>,
     distr_wash: &'a impl Distribution<f32>,
-) -> Box<SimGen<CarState>> {
+) -> Box<Process<CarState>> {
     // Generate random drive_time and wash_time at beginning
     let t_drive = distr_drive.sample(rng);
     let t_wash = distr_wash.sample(rng);
     Box::new(move |_| {
-	// The car drives for `t_drive` time
+        // The car drives for `t_drive` time
         yield Drive(t_drive);
-	// Arrives at carwash and waits for a machine to be free
+        // Arrives at carwash and waits for a machine to be free
         yield WaitMachine(carwash);
-	// The car wash for `t_wash` time, keeping the carwash machine (resource) occupied
+        // The car wash for `t_wash` time, keeping the carwash machine (resource) occupied
         yield Wash(t_wash);
-	// The car leaves the carwash, freeing the resource
+        // The car leaves the carwash, freeing the resource
         yield Leave(carwash);
     })
 }
@@ -82,7 +89,7 @@ fn main() {
     let mut sim = Simulation::new();
 
     // Create the carwash resource: It contains `NUM_MACHINES` machines to wash cars`
-    let carwash = sim.create_resource(NUM_MACHINES);
+    let carwash = sim.create_resource(Box::new(SimpleResource::new(NUM_MACHINES)));
 
     // Create random number genrator and some distributions
     let mut rng = Rng::from_entropy();
@@ -107,16 +114,18 @@ fn main() {
     // Compute average waiting time
     let mut wait_start_time = HashMap::new();
 
-    let sum: (f64, f64) = sim.processed_events()
+    let sum: (f64, f64) = sim
+        .processed_events()
         .iter()
         .filter_map(|(e, state)| match state {
-	    WaitMachine(_) => {
-		wait_start_time.insert(e.process(), e.time());
-		None
-	    },
-	    Wash(_) => Some(e.time() - wait_start_time.remove(&e.process()).unwrap()),
-	    _ => None,
-	}).fold((0.0, 0.0), |(t, c), t0| (t + t0, c + 1.0));
+            WaitMachine(_) => {
+                wait_start_time.insert(e.process(), e.time());
+                None
+            }
+            Wash(_) => Some(e.time() - wait_start_time.remove(&e.process()).unwrap()),
+            _ => None,
+        })
+        .fold((0.0, 0.0), |(t, c), t0| (t + t0, c + 1.0));
 
-    println!("The average waiting time was: {}", sum.0/sum.1);
+    println!("The average waiting time was: {}", sum.0 / sum.1);
 }

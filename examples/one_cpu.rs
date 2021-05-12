@@ -1,12 +1,19 @@
-// Simulate the scheduling of two processes on one CPU
+//! A very simple example that simulate the scheduling of two processes on one CPU
+//!
+//! Features shown in this example:
+//! * SimpleResource
+//! * Effects
+//! * EndCondition::Time
+//! * Simulation
 #![feature(generators, generator_trait)]
 use rand::{rngs::SmallRng as Rng, RngCore as RngT, SeedableRng};
 
+use desim::resources::SimpleResource;
 use desim::{Effect, EndCondition, Simulation};
 
 fn main() {
     let mut s = Simulation::new();
-    let cpu = s.create_resource(1);
+    let cpu = s.create_resource(Box::new(SimpleResource::new(1)));
     let p1 = s.create_process(Box::new(move |_| {
         for _ in 0..10 {
             // wait for the cpu to be available

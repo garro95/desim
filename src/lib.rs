@@ -19,6 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! crate will use stable. Generators will be the only nightly feature
 //! used in this crate.
 //!
+//! The examples directory in this repository contains full usage examples
+//! of the desim crate as a simulation framework.
+//!
 //! # Simulation
 //! A simulation is performed scheduling one or more processes that
 //! models the environment you are going to simulate. Your model may
@@ -29,7 +32,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! the `step()` method, or all at once, with `run()`, until and ending
 //! condition is met.
 //!
-//! The simulation will generate a log of all the events.
+//! The simulation will generate a log of all the events with a state that
+//! returns `true` to `should_log`.
 //!
 /*
 //! `nonblocking_run` lets you run the simulation in another thread
@@ -53,27 +57,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //!
 //!
 //! # Resource
-//! A resource is a finite amount of entities that can be used by one process
-//! a time. When all the instances of the resource of interest are being used by
-//! a process, the requiring one is enqueued in a FIFO and is resumed when the
-//! resource become available again. When the process does not need the resource
-//! anymore, it must release it.
+//! A resource is a finite amount of entities, eachone of which can be used by one process
+//! a time. When the process does not need the resource anymore, it must release it.
 //!
 //! A resource can be created in the simulation using the `create_resource`
-//! method, which requires the amount of resource and returns an identifier
+//! method, which requires the resource to add to the simulation and returns an identifier
 //! for that resource that can be used to require and release it.
 //!
 //! A resource can be required and reelased by a process yielding
 //! the corresponding `Effect`. There is no check on the fact that a process
-//! yielding `Release` was holding a resource with that ID, but if a resource
-//! gets more release then requests, the simulation will panic.
+//! yielding `Release` was holding a resource with that ID.
 //!
+//! For more information about the `Resource` trait and the `SimpleResource` implementation,
+//! see the [`resources`](crate::resources) module.
 
 #![feature(generators, generator_trait)]
 use std::cmp::{Ordering, Reverse};
-use std::collections::{BinaryHeap, VecDeque};
+use std::collections::BinaryHeap;
 use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
+
+pub mod resources;
+pub mod prelude;
+use resources::Resource;
 
 /// Data structures implementing this trait can be yielded from the generator
 /// associated with a `Process`. This allows attaching application-specific data
@@ -151,6 +157,7 @@ pub enum Effect {
     Release(ResourceId),
     /// Keep the process' state until it is resumed by another event.
     Wait,
+    /// Logs the event and resume the process immediately.
     Trace,
 }
 
@@ -159,14 +166,7 @@ pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
 /// The type of each `Process` generator
-pub type SimGen<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
-
-#[derive(Debug)]
-struct Resource<T> {
-    allocated: usize,
-    available: usize,
-    queue: VecDeque<Event<T>>,
-}
+pub type Process<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
 
 /// This struct provides the methods to create and run the simulation
 /// in a single thread.
@@ -179,10 +179,10 @@ struct Resource<T> {
 pub struct Simulation<T: SimState + Clone> {
     time: f64,
     steps: usize,
-    processes: Vec<Option<Box<SimGen<T>>>>,
+    processes: Vec<Option<Box<Process<T>>>>,
     future_events: BinaryHeap<Reverse<Event<T>>>,
     processed_events: Vec<(Event<T>, T)>,
-    resources: Vec<Resource<T>>,
+    resources: Vec<Box<dyn Resource<T>>>,
 }
 
 /// The Simulation Context is the argument used to resume the generator.
@@ -221,7 +221,7 @@ pub enum EndCondition {
     NSteps(usize),
 }
 
-impl<T: SimState + Clone> Simulation<T> {
+impl<T: 'static + SimState + Clone> Simulation<T> {
     /// Create a new `Simulation` environment.
     pub fn new() -> Simulation<T> {
         Simulation::<T>::default()
@@ -251,18 +251,15 @@ impl<T: SimState + Clone> Simulation<T> {
         id
     }
 
-    /// Create a new finite resource, of which n instancies are available.
+    /// Create a new resource.
     ///
     /// For more information about a resource, see the crate level documentation
+    /// and the documentation of the [`resources`](crate::resources) module.
     ///
     /// Returns the identifier of the resource
-    pub fn create_resource(&mut self, n: usize) -> ResourceId {
+    pub fn create_resource(&mut self, resource: Box<dyn Resource<T>>) -> ResourceId {
         let id = self.resources.len();
-        self.resources.push(Resource {
-            allocated: n,
-            available: n,
-            queue: VecDeque::new(),
-        });
+        self.resources.push(resource);
         id
     }
 
@@ -271,11 +268,7 @@ impl<T: SimState + Clone> Simulation<T> {
     /// yielding `Effect::Event` from a process during the simulation.
     // TODO: Review this API
     pub fn schedule_event(&mut self, time: f64, process: ProcessId, state: T) {
-        self.future_events.push(Reverse(Event {
-            time,
-            process,
-            state,
-        }));
+        self.future_events.push(Reverse(Event::new(time, process, state)));
     }
 
     fn log_processed_event(&mut self, event: &Event<T>, sim_state: T) {
@@ -289,7 +282,7 @@ impl<T: SimState + Clone> Simulation<T> {
         self.steps += 1;
         match self.future_events.pop() {
             Some(Reverse(event)) => {
-                self.time = event.time;
+                self.time = event.time();
                 let gstatepin = Pin::new(
                     self.processes[event.process]
                         .as_mut()
@@ -297,7 +290,7 @@ impl<T: SimState + Clone> Simulation<T> {
                 )
                 .resume(SimContext {
                     time: self.time,
-                    state: event.state.clone(),
+                    state: event.state().clone(),
                 });
                 // log event
                 // logging needs to happen before the processing because processing
@@ -317,62 +310,38 @@ impl<T: SimState + Clone> Simulation<T> {
                         match effect {
                             Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
                                 time: self.time + t,
-                                process: event.process,
+                                process: event.process(),
                                 state: y,
                             })),
                             Effect::Event { time, process } => {
-                                let e = Event {
-                                    time: time + self.time,
-                                    process,
-                                    state: y,
-                                };
+                                let e = Event::new(time + self.time, process, y);
                                 self.future_events.push(Reverse(e))
                             }
                             Effect::Request(r) => {
-                                let mut res = &mut self.resources[r];
-                                if res.available == 0 {
-                                    // enqueue the process
-                                    res.queue.push_back(event);
-                                } else {
-                                    // the process can use the resource immediately
-                                    self.future_events.push(Reverse(Event {
-                                        time: self.time,
-                                        process: event.process,
-                                        state: y,
-                                    }));
-                                    res.available -= 1;
+                                let res = &mut self.resources[r];
+                                let request_event = Event::new(self.time, event.process(), y);
+                                if let Some(e) = res.allocate_or_enqueue(request_event) {
+                                    self.future_events.push(Reverse(e))
                                 }
                             }
                             Effect::Release(r) => {
                                 let res = &mut self.resources[r];
-                                match res.queue.pop_front() {
-                                    // some processes in queue: schedule the next.
-                                    Some(mut request_event) => {
-                                        request_event.time = self.time;
-                                        self.future_events.push(Reverse(request_event))
-                                    }
-                                    None => {
-                                        assert!(res.available < res.allocated);
-                                        res.available += 1;
-                                    }
+                                let release_event = Event::new(self.time, event.process(), y);
+                                if let Some(e) =
+                                    res.release_and_schedule_next(release_event.clone())
+                                {
+                                    self.future_events.push(Reverse(e))
                                 }
                                 // after releasing the resource the process
                                 // can be resumed
-                                self.future_events.push(Reverse(Event {
-                                    time: self.time,
-                                    process: event.process,
-                                    state: y,
-                                }))
+                                self.future_events.push(Reverse(release_event));
                             }
                             Effect::Wait => {}
                             Effect::Trace => {
                                 // this event is only for tracing, reschedule
-                                // immediately
-                                self.future_events.push(Reverse(Event {
-                                    time: self.time,
-                                    process: event.process,
-                                    state: y,
-                                }))
+                                // immediately'
+				let e = Event::new(self.time, event.process(), y);
+                                self.future_events.push(Reverse(e));
                             }
                         }
                     }
@@ -382,7 +351,7 @@ impl<T: SimState + Clone> Simulation<T> {
                         // waste of space since it is completed.
                         // May be worth to use another data structure.
                         // At least let's remove the generator itself.
-                        self.processes[event.process].take();
+                        self.processes[event.process()].take();
                     }
                 }
             }
@@ -428,12 +397,42 @@ impl<T> SimContext<T> {
 }
 
 impl<T> Event<T> {
+    pub fn new(time: f64, process: ProcessId, state: T) -> Event<T> {
+        Event {
+            time,
+            process,
+            state,
+        }
+    }
     pub fn time(&self) -> f64 {
         self.time
     }
-
+    pub fn set_time(&mut self, time: f64) {
+        self.time = time;
+    }
     pub fn process(&self) -> ProcessId {
         self.process
+    }
+    pub fn set_process(&mut self, process: ProcessId) {
+        self.process = process;
+    }
+    pub fn state(&self) -> &T {
+        &self.state
+    }
+    pub fn state_mut(&mut self) -> &mut T {
+	&mut self.state
+    }
+    pub fn set_state(&mut self, state: T) {
+        self.state = state;
+    }
+}
+
+impl<T: SimState> Event<T> {
+    pub fn effect(&self) -> Effect {
+        self.state.get_effect()
+    }
+    pub fn set_effect(&mut self, effect: Effect) {
+        self.state.set_effect(effect)
     }
 }
 
@@ -530,10 +529,11 @@ mod tests {
 
     #[test]
     fn resource() {
+        use crate::resources::SimpleResource;
         use crate::{Effect, EndCondition::NoEvents, Simulation};
 
         let mut s = Simulation::new();
-        let r = s.create_resource(1);
+        let r = s.create_resource(Box::new(SimpleResource::new(1)));
 
         // simple process that lock the resource for 7 time units
         let p1 = s.create_process(Box::new(move |_| {
