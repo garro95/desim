@@ -8,7 +8,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  TARGET: thumbv6m-none-eabi
 
 jobs:
   build:
@@ -17,6 +16,5 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - run: rustup target add $TARGET
     - name: Build
-      run: cargo build --verbose
+      run: cargo +nightly build --verbose
