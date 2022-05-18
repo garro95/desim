@@ -77,8 +77,8 @@ use std::collections::BinaryHeap;
 use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
 
-pub mod resources;
 pub mod prelude;
+pub mod resources;
 use resources::Resource;
 
 /// Data structures implementing this trait can be yielded from the generator
@@ -155,6 +155,8 @@ pub enum Effect {
     Request(ResourceId),
     /// This effect is yielded to release a resource that is not needed anymore.
     Release(ResourceId),
+    Push(ResourceId),
+    Pop(ResourceId),
     /// Keep the process' state until it is resumed by another event.
     Wait,
     /// Logs the event and resume the process immediately.
@@ -268,7 +270,8 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// yielding `Effect::Event` from a process during the simulation.
     // TODO: Review this API
     pub fn schedule_event(&mut self, time: f64, process: ProcessId, state: T) {
-        self.future_events.push(Reverse(Event::new(time, process, state)));
+        self.future_events
+            .push(Reverse(Event::new(time, process, state)));
     }
 
     fn log_processed_event(&mut self, event: &Event<T>, sim_state: T) {
@@ -320,28 +323,40 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                             Effect::Request(r) => {
                                 let res = &mut self.resources[r];
                                 let request_event = Event::new(self.time, event.process(), y);
-                                if let Some(e) = res.allocate_or_enqueue(request_event) {
+                                for e in res.allocate_or_enqueue(request_event) {
                                     self.future_events.push(Reverse(e))
                                 }
                             }
                             Effect::Release(r) => {
                                 let res = &mut self.resources[r];
-                                let release_event = Event::new(self.time, event.process(), y);
-                                if let Some(e) =
-                                    res.release_and_schedule_next(release_event.clone())
-                                {
-                                    self.future_events.push(Reverse(e))
+                                let request_event = Event::new(self.time, event.process(), y);
+                                let events = res.release_and_schedule_next(request_event);
+                                for e in events {
+                                    self.future_events.push(Reverse(e));
                                 }
-                                // after releasing the resource the process
-                                // can be resumed
-                                self.future_events.push(Reverse(release_event));
                             }
                             Effect::Wait => {}
                             Effect::Trace => {
                                 // this event is only for tracing, reschedule
                                 // immediately'
-				let e = Event::new(self.time, event.process(), y);
+                                let e = Event::new(self.time, event.process(), y);
                                 self.future_events.push(Reverse(e));
+                            }
+                            Effect::Push(r) => {
+                                let res = &mut self.resources[r];
+                                let request_event = Event::new(self.time, event.process(), y);
+                                let events = res.allocate_or_enqueue(request_event);
+                                for e in events {
+                                    self.future_events.push(Reverse(e));
+                                }
+                            }
+                            Effect::Pop(r) => {
+                                let res = &mut self.resources[r];
+                                let request_event = Event::new(self.time, event.process(), y);
+                                let events = res.release_and_schedule_next(request_event);
+                                for e in events {
+                                    self.future_events.push(Reverse(e));
+                                }
                             }
                         }
                     }
@@ -420,7 +435,7 @@ impl<T> Event<T> {
         &self.state
     }
     pub fn state_mut(&mut self) -> &mut T {
-	&mut self.state
+        &mut self.state
     }
     pub fn set_state(&mut self, state: T) {
         self.state = state;
