@@ -77,8 +77,8 @@ use std::collections::BinaryHeap;
 use std::ops::{Generator, GeneratorState};
 use std::pin::Pin;
 
-pub mod resources;
 pub mod prelude;
+pub mod resources;
 use resources::Resource;
 
 /// Data structures implementing this trait can be yielded from the generator
@@ -268,7 +268,8 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// yielding `Effect::Event` from a process during the simulation.
     // TODO: Review this API
     pub fn schedule_event(&mut self, time: f64, process: ProcessId, state: T) {
-        self.future_events.push(Reverse(Event::new(time, process, state)));
+        self.future_events
+            .push(Reverse(Event::new(time, process, state)));
     }
 
     fn log_processed_event(&mut self, event: &Event<T>, sim_state: T) {
@@ -340,7 +341,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                             Effect::Trace => {
                                 // this event is only for tracing, reschedule
                                 // immediately'
-				let e = Event::new(self.time, event.process(), y);
+                                let e = Event::new(self.time, event.process(), y);
                                 self.future_events.push(Reverse(e));
                             }
                         }
@@ -420,7 +421,7 @@ impl<T> Event<T> {
         &self.state
     }
     pub fn state_mut(&mut self) -> &mut T {
-	&mut self.state
+        &mut self.state
     }
     pub fn set_state(&mut self, state: T) {
         self.state = state;

@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 use desim::prelude::*;
 use desim::resources::Resource;
 
-
 use rand::{
     distributions::{Distribution, Uniform},
     rngs::SmallRng as Rng,
@@ -37,19 +36,18 @@ const Q_SIZE: usize = 30;
 const NUM_CLIENTS: usize = 800;
 const SIM_TIME: f64 = 50.0;
 
-
 #[derive(Copy, Clone, Debug)]
 struct State {
     effect: Effect,
-    queue_full: bool
+    queue_full: bool,
 }
 
 impl State {
     fn new(effect: Effect) -> State {
-	State{
-	    effect,
-	    queue_full: false
-	}
+        State {
+            effect,
+            queue_full: false,
+        }
     }
 }
 
@@ -63,55 +61,57 @@ struct FiniteQueue {
 
 impl SimState for State {
     fn get_effect(&self) -> Effect {
-	self.effect
+        self.effect
     }
     fn set_effect(&mut self, effect: Effect) {
-	self.effect = effect;
+        self.effect = effect;
     }
-    fn should_log(&self) -> bool {true}
+    fn should_log(&self) -> bool {
+        true
+    }
 }
 
 impl Resource<State> for FiniteQueue {
     fn allocate_or_enqueue(&mut self, event: Event<State>) -> Option<Event<State>> {
-	if self.available > 0 {
-	    self.available -= 1;
-	    Some(event)
-	} else {
-	    if self.queue_len == Q_SIZE {
-		let mut event = event;
-		event.state_mut().queue_full = true;
-		Some(event)
-	    } else {
-		let first_position = (self.queue_start + self.queue_len) % Q_SIZE;
-		self.queue[first_position] = Some(event);
-		self.queue_len += 1;
-		None
-	    }	
-	}
+        if self.available > 0 {
+            self.available -= 1;
+            Some(event)
+        } else {
+            if self.queue_len == Q_SIZE {
+                let mut event = event;
+                event.state_mut().queue_full = true;
+                Some(event)
+            } else {
+                let first_position = (self.queue_start + self.queue_len) % Q_SIZE;
+                self.queue[first_position] = Some(event);
+                self.queue_len += 1;
+                None
+            }
+        }
     }
     fn release_and_schedule_next(&mut self, event: Event<State>) -> Option<Event<State>> {
-	if self.queue_len > 0 {
-	    let mut next_event = self.queue[self.queue_start].take().unwrap();
-	    self.queue_start = (self.queue_start + 1) % Q_SIZE;
-	    self.queue_len -= 1;
-	    next_event.set_time(event.time());
-	    Some(next_event)
-	} else {
-	    self.available += 1;
-	    None
-	}
+        if self.queue_len > 0 {
+            let mut next_event = self.queue[self.queue_start].take().unwrap();
+            self.queue_start = (self.queue_start + 1) % Q_SIZE;
+            self.queue_len -= 1;
+            next_event.set_time(event.time());
+            Some(next_event)
+        } else {
+            self.available += 1;
+            None
+        }
     }
 }
 
 fn client_process(res: ResourceId) -> Box<Process<State>> {
     Box::new(move |response: SimContext<State>| {
-	yield State::new(Effect::Request(res));
-	if !response.state().queue_full {
-	    yield State::new(Effect::TimeOut(5.0));
-	    yield State::new(Effect::Release(res));
-	} else {
-	    yield State::new(Effect::Trace);
-	}
+        yield State::new(Effect::Request(res));
+        if !response.state().queue_full {
+            yield State::new(Effect::TimeOut(5.0));
+            yield State::new(Effect::Release(res));
+        } else {
+            yield State::new(Effect::Trace);
+        }
     })
 }
 
@@ -120,12 +120,12 @@ fn main() {
     let unif = Uniform::new(0.0, SIM_TIME);
     let rng = Rng::from_entropy();
 
-    let res = FiniteQueue{
-	quantity: 4,
-	available: 4,
-	queue: [None; Q_SIZE],
-	queue_start: 0,
-	queue_len: 0
+    let res = FiniteQueue {
+        quantity: 4,
+        available: 4,
+        queue: [None; Q_SIZE],
+        queue_start: 0,
+        queue_len: 0,
     };
     let res = sim.create_resource(Box::new(res));
 
@@ -141,7 +141,11 @@ fn main() {
         println!("{}\t{:?}\t{:?}", e.time(), e.state(), state);
     }
 
-    println!("Lost clients: {}", sim.processed_events()
-	     .iter().filter(|(e, _)| e.state().queue_full).count());
-    
+    println!(
+        "Lost clients: {}",
+        sim.processed_events()
+            .iter()
+            .filter(|(e, _)| e.state().queue_full)
+            .count()
+    );
 }

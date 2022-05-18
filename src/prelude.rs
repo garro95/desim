@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //!
 //! The prelude is a list of things that you can import into your program with a single `use`.
 //! It includes types which are used in almost every desim simulation program.
-//! 
+//!
 //! To use the prelude in your simulation simply add in your source
 //! ```rust
 //! use desim::prelude::*;

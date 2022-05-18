@@ -16,8 +16,8 @@ use rand::{
 };
 use rand_distr::Exp;
 
-use desim::resources::SimpleResource;
 use desim::prelude::*;
+use desim::resources::SimpleResource;
 use CarState::*;
 
 const NUM_MACHINES: usize = 4; // A carwash with 4 machines to wash cars
