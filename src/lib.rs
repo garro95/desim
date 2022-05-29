@@ -409,6 +409,9 @@ impl<T> SimContext<T> {
     pub fn state(&self) -> &T {
         &self.state
     }
+    pub fn into_inner(self)->(f64, T) {
+        (self.time, self.state)
+    }
 }
 
 impl<T> Event<T> {
