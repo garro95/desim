@@ -274,7 +274,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// Create a new store.
     ///
     /// For more information about a store, see the crate level documentation
-    /// and the documentation of the [`stores`](crate::store) module.
+    /// and the documentation of the [`resources`](crate::resources) module.
     ///
     /// Returns the identifier of the store
     pub fn create_store(&mut self, store: Box<dyn Store<T>>) -> StoreId {
@@ -603,5 +603,38 @@ mod tests {
         let s = s.run(NoEvents);
         println!("{:?}", s.processed_events());
         assert_eq!(s.time(), 10.0);
+    }
+
+    #[test]
+    fn store() {
+        use crate::resources::SimpleStore;
+        use crate::{Effect, EndCondition::NoEvents, Simulation};
+
+        let mut sim = Simulation::new();
+        let store = sim.create_store(Box::new(SimpleStore::new(1)));
+
+        // simple process that pulls out of the store immediately and after 7 time units
+        let p1 = sim.create_process(Box::new(move |_| {
+            yield Effect::Pull(store);
+            yield Effect::TimeOut(7.0);
+            yield Effect::Pull(store);
+        }));
+        // simple process that pushes into the store immediately and after 3 time units
+        let p2 = sim.create_process(Box::new(move |_| {
+            yield Effect::Push(store);
+            yield Effect::TimeOut(3.0);
+            yield Effect::Push(store);
+        }));
+
+        // let p1 start immediately...
+        sim.schedule_event(0.0, p1, Effect::TimeOut(0.));
+        // let p2 start after 2 t.u., when r is not available
+        sim.schedule_event(2.0, p2, Effect::TimeOut(2.));
+        // p2 will wait r to be free (time 7.0) and its timeout
+        // of 3.0 t.u. The simulation will end at time 10.0
+
+        let s = sim.run(NoEvents);
+        println!("{:?}", s.processed_events());
+        assert_eq!(s.time(), 9.0);
     }
 }
