@@ -32,7 +32,7 @@ impl SimState for MyState {
         *self = match effect {
             Effect::Push(id) => MyState::Push(id, 0),
             Effect::Pull(id) => MyState::Pull(id),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
     }
 

@@ -195,8 +195,7 @@ impl<T: SimState + Clone> Store<T> for SimpleStore<T> {
         }
     }
 }
-impl<T> SimpleStore<T>
-{
+impl<T> SimpleStore<T> {
     pub fn new(capacity: usize) -> Self {
         SimpleStore {
             capacity,
