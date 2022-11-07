@@ -271,12 +271,12 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
         id
     }
 
-    /// Create a new resource.
+    /// Create a new store.
     ///
-    /// For more information about a resource, see the crate level documentation
-    /// and the documentation of the [`resources`](crate::resources) module.
+    /// For more information about a store, see the crate level documentation
+    /// and the documentation of the [`stores`](crate::store) module.
     ///
-    /// Returns the identifier of the resource
+    /// Returns the identifier of the store
     pub fn create_store(&mut self, store: Box<dyn Store<T>>) -> StoreId {
         let id = self.stores.len();
         self.stores.push(store);

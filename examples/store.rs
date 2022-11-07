@@ -1,9 +1,9 @@
 //! A very simple example that simulate the scheduling of two processes on one CPU
 //!
 //! Features shown in this example:
-//! * SimpleResource
+//! * SimpleStore
 //! * Effects
-//! * EndCondition::Time
+//! * EndCondition::NoEvents
 //! * Simulation
 #![feature(generators, generator_trait)]
 
