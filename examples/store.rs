@@ -7,14 +7,14 @@
 //! * Simulation
 #![feature(generators, generator_trait)]
 
-use desim::resources::Store;
-use desim::{Effect, EndCondition, ResourceId, SimState, Simulation};
+use desim::resources::SimpleStore;
+use desim::{Effect, EndCondition, SimState, Simulation, StoreId};
 #[derive(Default, Clone, Debug)]
 enum MyState {
     #[default]
     Continue,
-    Push(ResourceId, u32),
-    Pop(ResourceId),
+    Push(StoreId, u32),
+    Pull(StoreId),
     Wait(f64),
 }
 
@@ -23,23 +23,27 @@ impl SimState for MyState {
         match self {
             MyState::Continue => Effect::TimeOut(0.),
             MyState::Push(id, _) => Effect::Push(*id),
-            MyState::Pop(id) => Effect::Pop(*id),
+            MyState::Pull(id) => Effect::Pull(*id),
             MyState::Wait(time) => Effect::TimeOut(*time),
         }
     }
 
-    fn set_effect(&mut self, _: Effect) {
-        todo!();
+    fn set_effect(&mut self, effect: Effect) {
+        *self = match effect {
+            Effect::Push(id) => MyState::Push(id, 0),
+            Effect::Pull(id) => MyState::Pull(id),
+            _ => unimplemented!()
+        };
     }
 
     fn should_log(&self) -> bool {
-        false
+        true
     }
 }
 
 fn main() {
     let mut s = Simulation::new();
-    let queue = s.create_resource(Box::new(Store::new(1)));
+    let queue = s.create_store(Box::new(SimpleStore::new(1)));
     let p1 = s.create_process(Box::new(move |_| {
         for i in 0..10 {
             // wait for the cpu to be available
@@ -52,7 +56,7 @@ fn main() {
     let p2 = s.create_process(Box::new(move |_| {
         for _ in 0..10 {
             // wait for the CPU
-            let ret = yield MyState::Pop(queue);
+            let ret = yield MyState::Pull(queue);
             println!("ret: {:?}", ret);
             // do some job for a random amount of time units between 0 and 10
             // yield MyState::Wait(10.0);

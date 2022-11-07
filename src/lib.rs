@@ -79,7 +79,7 @@ use std::pin::Pin;
 
 pub mod prelude;
 pub mod resources;
-use resources::Resource;
+use resources::{Resource, Store};
 
 /// Data structures implementing this trait can be yielded from the generator
 /// associated with a `Process`. This allows attaching application-specific data
@@ -155,8 +155,10 @@ pub enum Effect {
     Request(ResourceId),
     /// This effect is yielded to release a resource that is not needed anymore.
     Release(ResourceId),
-    Push(ResourceId),
-    Pop(ResourceId),
+    /// This effect is yielded to push into a store
+    Push(StoreId),
+    /// This effect is yielded to pull out of a store
+    Pull(StoreId),
     /// Keep the process' state until it is resumed by another event.
     Wait,
     /// Logs the event and resume the process immediately.
@@ -167,6 +169,8 @@ pub enum Effect {
 pub type ProcessId = usize;
 /// Identifies a resource. Can be used to request and release it.
 pub type ResourceId = usize;
+/// Identifies a store. Can be used to push into and pull out of it.
+pub type StoreId = usize;
 /// The type of each `Process` generator
 pub type Process<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
 
@@ -185,6 +189,8 @@ pub struct Simulation<T: SimState + Clone> {
     future_events: BinaryHeap<Reverse<Event<T>>>,
     processed_events: Vec<(Event<T>, T)>,
     resources: Vec<Box<dyn Resource<T>>>,
+    stores: Vec<Box<dyn Store<T>>>,
+    future_events_buffer: Vec<Event<T>>,
 }
 
 /// The Simulation Context is the argument used to resume the generator.
@@ -265,6 +271,18 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
         id
     }
 
+    /// Create a new resource.
+    ///
+    /// For more information about a resource, see the crate level documentation
+    /// and the documentation of the [`resources`](crate::resources) module.
+    ///
+    /// Returns the identifier of the resource
+    pub fn create_store(&mut self, store: Box<dyn Store<T>>) -> StoreId {
+        let id = self.stores.len();
+        self.stores.push(store);
+        id
+    }
+
     /// Schedule a process to be executed after `time` time instants.
     /// Another way to schedule events is
     /// yielding `Effect::Event` from a process during the simulation.
@@ -323,17 +341,21 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                             Effect::Request(r) => {
                                 let res = &mut self.resources[r];
                                 let request_event = Event::new(self.time, event.process(), y);
-                                for e in res.allocate_or_enqueue(request_event) {
+                                if let Some(e) = res.allocate_or_enqueue(request_event) {
                                     self.future_events.push(Reverse(e))
                                 }
                             }
                             Effect::Release(r) => {
                                 let res = &mut self.resources[r];
-                                let request_event = Event::new(self.time, event.process(), y);
-                                let events = res.release_and_schedule_next(request_event);
-                                for e in events {
+                                let release_event = Event::new(self.time, event.process(), y);
+                                if let Some(e) =
+                                    res.release_and_schedule_next(release_event.clone())
+                                {
                                     self.future_events.push(Reverse(e));
                                 }
+                                // after releasing the resource the process
+                                // can be resumed
+                                self.future_events.push(Reverse(release_event));
                             }
                             Effect::Wait => {}
                             Effect::Trace => {
@@ -342,21 +364,27 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                                 let e = Event::new(self.time, event.process(), y);
                                 self.future_events.push(Reverse(e));
                             }
-                            Effect::Push(r) => {
-                                let res = &mut self.resources[r];
+                            Effect::Push(s) => {
+                                let store = &mut self.stores[s];
                                 let request_event = Event::new(self.time, event.process(), y);
-                                let events = res.allocate_or_enqueue(request_event);
-                                for e in events {
-                                    self.future_events.push(Reverse(e));
-                                }
+                                store.push_or_enqueue_and_schedule_next(
+                                    request_event,
+                                    &mut self.future_events_buffer,
+                                );
+                                self.future_events.extend(
+                                    self.future_events_buffer.drain(..).map(|e| Reverse(e)),
+                                );
                             }
-                            Effect::Pop(r) => {
-                                let res = &mut self.resources[r];
+                            Effect::Pull(s) => {
+                                let store = &mut self.stores[s];
                                 let request_event = Event::new(self.time, event.process(), y);
-                                let events = res.release_and_schedule_next(request_event);
-                                for e in events {
-                                    self.future_events.push(Reverse(e));
-                                }
+                                store.pull_or_enqueue_and_schedule_next(
+                                    request_event,
+                                    &mut self.future_events_buffer,
+                                );
+                                self.future_events.extend(
+                                    self.future_events_buffer.drain(..).map(|e| Reverse(e)),
+                                );
                             }
                         }
                     }
@@ -460,6 +488,8 @@ impl<T: SimState + Clone> Default for Simulation<T> {
             future_events: BinaryHeap::default(),
             processed_events: Vec::default(),
             resources: Vec::default(),
+            stores: Vec::default(),
+            future_events_buffer: Vec::default(),
         }
     }
 }

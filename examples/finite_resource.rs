@@ -72,33 +72,33 @@ impl SimState for State {
 }
 
 impl Resource<State> for FiniteQueue {
-    fn allocate_or_enqueue(&mut self, event: Event<State>) -> Vec<Event<State>> {
+    fn allocate_or_enqueue(&mut self, event: Event<State>) -> Option<Event<State>> {
         if self.available > 0 {
             self.available -= 1;
-            vec![event]
+            Some(event)
         } else {
             if self.queue_len == Q_SIZE {
                 let mut event = event;
                 event.state_mut().queue_full = true;
-                vec![event]
+                Some(event)
             } else {
                 let first_position = (self.queue_start + self.queue_len) % Q_SIZE;
                 self.queue[first_position] = Some(event);
                 self.queue_len += 1;
-                vec![]
+                None
             }
         }
     }
-    fn release_and_schedule_next(&mut self, event: Event<State>) -> Vec<Event<State>> {
+    fn release_and_schedule_next(&mut self, event: Event<State>) -> Option<Event<State>> {
         if self.queue_len > 0 {
             let mut next_event = self.queue[self.queue_start].take().unwrap();
             self.queue_start = (self.queue_start + 1) % Q_SIZE;
             self.queue_len -= 1;
             next_event.set_time(event.time());
-            vec![next_event, event]
+            Some(next_event)
         } else {
             self.available += 1;
-            vec![event]
+            None
         }
     }
 }
