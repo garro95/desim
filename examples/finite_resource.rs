@@ -52,7 +52,7 @@ impl State {
 }
 
 struct FiniteQueue {
-    quantity: usize,
+    _quantity: usize,
     available: usize,
     queue: [Option<Event<State>>; Q_SIZE],
     queue_start: usize,
@@ -76,17 +76,15 @@ impl Resource<State> for FiniteQueue {
         if self.available > 0 {
             self.available -= 1;
             Some(event)
+        } else if self.queue_len == Q_SIZE {
+            let mut event = event;
+            event.state_mut().queue_full = true;
+            Some(event)
         } else {
-            if self.queue_len == Q_SIZE {
-                let mut event = event;
-                event.state_mut().queue_full = true;
-                Some(event)
-            } else {
-                let first_position = (self.queue_start + self.queue_len) % Q_SIZE;
-                self.queue[first_position] = Some(event);
-                self.queue_len += 1;
-                None
-            }
+            let first_position = (self.queue_start + self.queue_len) % Q_SIZE;
+            self.queue[first_position] = Some(event);
+            self.queue_len += 1;
+            None
         }
     }
     fn release_and_schedule_next(&mut self, event: Event<State>) -> Option<Event<State>> {
@@ -121,7 +119,7 @@ fn main() {
     let rng = Rng::from_entropy();
 
     let res = FiniteQueue {
-        quantity: 4,
+        _quantity: 4,
         available: 4,
         queue: [None; Q_SIZE],
         queue_start: 0,
