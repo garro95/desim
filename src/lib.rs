@@ -372,7 +372,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                                     &mut self.future_events_buffer,
                                 );
                                 self.future_events.extend(
-                                    self.future_events_buffer.drain(..).map(|e| Reverse(e)),
+                                    self.future_events_buffer.drain(..).map(Reverse),
                                 );
                             }
                             Effect::Pull(s) => {
@@ -383,7 +383,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                                     &mut self.future_events_buffer,
                                 );
                                 self.future_events.extend(
-                                    self.future_events_buffer.drain(..).map(|e| Reverse(e)),
+                                    self.future_events_buffer.drain(..).map(Reverse),
                                 );
                             }
                         }
@@ -421,7 +421,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     fn check_ending_condition(&self, ending_condition: &EndCondition) -> bool {
         match &ending_condition {
             EndCondition::Time(t) => self.time >= *t,
-            EndCondition::NoEvents => self.future_events.len() == 0,
+            EndCondition::NoEvents => self.future_events.is_empty(),
             EndCondition::NSteps(n) => self.steps == *n,
         }
     }
