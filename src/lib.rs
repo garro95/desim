@@ -308,10 +308,10 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                     .as_mut()
                     .expect("ERROR. Tried to resume a completed process."),
             )
-                .resume(SimContext {
-                    time: self.time,
-                    state: event.state().clone(),
-                });
+            .resume(SimContext {
+                time: self.time,
+                state: event.state().clone(),
+            });
             // log event
             // logging needs to happen before the processing because processing
             // can add further events (such as resource acquired/released) and
@@ -347,9 +347,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                         Effect::Release(r) => {
                             let res = &mut self.resources[r];
                             let release_event = Event::new(self.time, event.process(), y);
-                            if let Some(e) =
-                                res.release_and_schedule_next(release_event.clone())
-                            {
+                            if let Some(e) = res.release_and_schedule_next(release_event.clone()) {
                                 self.future_events.push(Reverse(e));
                             }
                             // after releasing the resource the process
@@ -370,9 +368,8 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                                 request_event,
                                 &mut self.future_events_buffer,
                             );
-                            self.future_events.extend(
-                                self.future_events_buffer.drain(..).map(Reverse),
-                            );
+                            self.future_events
+                                .extend(self.future_events_buffer.drain(..).map(Reverse));
                         }
                         Effect::Pull(s) => {
                             let store = &mut self.stores[s];
@@ -381,9 +378,8 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                                 request_event,
                                 &mut self.future_events_buffer,
                             );
-                            self.future_events.extend(
-                                self.future_events_buffer.drain(..).map(Reverse),
-                            );
+                            self.future_events
+                                .extend(self.future_events_buffer.drain(..).map(Reverse));
                         }
                     }
                 }
