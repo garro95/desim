@@ -99,7 +99,7 @@ impl PCBStateCtx {
     #[inline]
     fn res(&mut self, r_id: ResourceId, should_log: bool, stage: PCBStage, need: bool) -> PCBState {
         let mut r_state = self.state.clone();
-        r_state.stage = stage.clone();
+        r_state.stage = stage;
         r_state.log = should_log;
         if need {
             r_state.effect = Effect::Request(r_id);
@@ -134,14 +134,14 @@ impl PCBStateCtx {
         let st = match self.state.stage {
             PCBStage::Init => (15 + self.rng.next_u32() % 20) as f64,
             PCBStage::SurfaceMountPlaced => (30 + self.rng.next_u32() % 20) as f64,
-            _ => 0.0 as f64,
+            _ => 0.0_f64,
         };
         self.work(true, st, PCBStage::InWork)
     }
     fn et_work(&mut self) -> PCBState {
         let st = match self.state.stage {
             PCBStage::ThruHolePlaced => (5 + self.rng.next_u32() % 5) as f64,
-            _ => 0.0 as f64,
+            _ => 0.0_f64,
         };
         self.work(true, st, PCBStage::InWork)
     }
