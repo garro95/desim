@@ -301,104 +301,101 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// Proceed in the simulation by 1 step
     pub fn step(&mut self) {
         self.steps += 1;
-        match self.future_events.pop() {
-            Some(Reverse(event)) => {
-                self.time = event.time();
-                let gstatepin = Pin::new(
-                    self.processes[event.process]
-                        .as_mut()
-                        .expect("ERROR. Tried to resume a completed process."),
-                )
+        if let Some(Reverse(event)) = self.future_events.pop() {
+            self.time = event.time();
+            let gstatepin = Pin::new(
+                self.processes[event.process]
+                    .as_mut()
+                    .expect("ERROR. Tried to resume a completed process."),
+            )
                 .resume(SimContext {
                     time: self.time,
                     state: event.state().clone(),
                 });
-                // log event
-                // logging needs to happen before the processing because processing
-                // can add further events (such as resource acquired/released) and
-                // it becomes confusing if you first get a resource acquired event
-                // and only log the request for it afterwards.
-                match gstatepin.clone() {
-                    GeneratorState::Yielded(y) => {
-                        self.log_processed_event(&event, y);
-                    }
-                    GeneratorState::Complete(_) => {}
+            // log event
+            // logging needs to happen before the processing because processing
+            // can add further events (such as resource acquired/released) and
+            // it becomes confusing if you first get a resource acquired event
+            // and only log the request for it afterwards.
+            match gstatepin.clone() {
+                GeneratorState::Yielded(y) => {
+                    self.log_processed_event(&event, y);
                 }
-                // process event
-                match gstatepin {
-                    GeneratorState::Yielded(y) => {
-                        let effect = y.get_effect();
-                        match effect {
-                            Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
-                                time: self.time + t,
-                                process: event.process(),
-                                state: y,
-                            })),
-                            Effect::Event { time, process } => {
-                                let e = Event::new(time + self.time, process, y);
+                GeneratorState::Complete(_) => {}
+            }
+            // process event
+            match gstatepin {
+                GeneratorState::Yielded(y) => {
+                    let effect = y.get_effect();
+                    match effect {
+                        Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
+                            time: self.time + t,
+                            process: event.process(),
+                            state: y,
+                        })),
+                        Effect::Event { time, process } => {
+                            let e = Event::new(time + self.time, process, y);
+                            self.future_events.push(Reverse(e))
+                        }
+                        Effect::Request(r) => {
+                            let res = &mut self.resources[r];
+                            let request_event = Event::new(self.time, event.process(), y);
+                            if let Some(e) = res.allocate_or_enqueue(request_event) {
                                 self.future_events.push(Reverse(e))
                             }
-                            Effect::Request(r) => {
-                                let res = &mut self.resources[r];
-                                let request_event = Event::new(self.time, event.process(), y);
-                                if let Some(e) = res.allocate_or_enqueue(request_event) {
-                                    self.future_events.push(Reverse(e))
-                                }
-                            }
-                            Effect::Release(r) => {
-                                let res = &mut self.resources[r];
-                                let release_event = Event::new(self.time, event.process(), y);
-                                if let Some(e) =
-                                    res.release_and_schedule_next(release_event.clone())
-                                {
-                                    self.future_events.push(Reverse(e));
-                                }
-                                // after releasing the resource the process
-                                // can be resumed
-                                self.future_events.push(Reverse(release_event));
-                            }
-                            Effect::Wait => {}
-                            Effect::Trace => {
-                                // this event is only for tracing, reschedule
-                                // immediately'
-                                let e = Event::new(self.time, event.process(), y);
+                        }
+                        Effect::Release(r) => {
+                            let res = &mut self.resources[r];
+                            let release_event = Event::new(self.time, event.process(), y);
+                            if let Some(e) =
+                                res.release_and_schedule_next(release_event.clone())
+                            {
                                 self.future_events.push(Reverse(e));
                             }
-                            Effect::Push(s) => {
-                                let store = &mut self.stores[s];
-                                let request_event = Event::new(self.time, event.process(), y);
-                                store.push_or_enqueue_and_schedule_next(
-                                    request_event,
-                                    &mut self.future_events_buffer,
-                                );
-                                self.future_events.extend(
-                                    self.future_events_buffer.drain(..).map(Reverse),
-                                );
-                            }
-                            Effect::Pull(s) => {
-                                let store = &mut self.stores[s];
-                                let request_event = Event::new(self.time, event.process(), y);
-                                store.pull_or_enqueue_and_schedule_next(
-                                    request_event,
-                                    &mut self.future_events_buffer,
-                                );
-                                self.future_events.extend(
-                                    self.future_events_buffer.drain(..).map(Reverse),
-                                );
-                            }
+                            // after releasing the resource the process
+                            // can be resumed
+                            self.future_events.push(Reverse(release_event));
+                        }
+                        Effect::Wait => {}
+                        Effect::Trace => {
+                            // this event is only for tracing, reschedule
+                            // immediately'
+                            let e = Event::new(self.time, event.process(), y);
+                            self.future_events.push(Reverse(e));
+                        }
+                        Effect::Push(s) => {
+                            let store = &mut self.stores[s];
+                            let request_event = Event::new(self.time, event.process(), y);
+                            store.push_or_enqueue_and_schedule_next(
+                                request_event,
+                                &mut self.future_events_buffer,
+                            );
+                            self.future_events.extend(
+                                self.future_events_buffer.drain(..).map(Reverse),
+                            );
+                        }
+                        Effect::Pull(s) => {
+                            let store = &mut self.stores[s];
+                            let request_event = Event::new(self.time, event.process(), y);
+                            store.pull_or_enqueue_and_schedule_next(
+                                request_event,
+                                &mut self.future_events_buffer,
+                            );
+                            self.future_events.extend(
+                                self.future_events_buffer.drain(..).map(Reverse),
+                            );
                         }
                     }
-                    GeneratorState::Complete(_) => {
-                        // FIXME: removing the process from the vector would invalidate
-                        // all existing `ProcessId`s, but keeping it would be a
-                        // waste of space since it is completed.
-                        // May be worth to use another data structure.
-                        // At least let's remove the generator itself.
-                        self.processes[event.process()].take();
-                    }
+                }
+                GeneratorState::Complete(_) => {
+                    // FIXME: removing the process from the vector would invalidate
+                    // all existing `ProcessId`s, but keeping it would be a
+                    // waste of space since it is completed.
+                    // May be worth to use another data structure.
+                    // At least let's remove the generator itself.
+                    self.processes[event.process()].take();
                 }
             }
-            None => {}
         }
     }
 
@@ -503,6 +500,7 @@ impl<T> PartialEq for Event<T> {
 impl<T> Eq for Event<T> {}
 
 impl<T> PartialOrd for Event<T> {
+    #[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
     fn partial_cmp(&self, other: &Event<T>) -> Option<Ordering> {
         self.time.partial_cmp(&other.time)
     }
