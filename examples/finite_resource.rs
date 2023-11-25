@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! * Custom state
 //! * EndCondition::NoEvents
 
-#![feature(generators)]
+#![feature(coroutines)]
 
 use desim::prelude::*;
 use desim::resources::Resource;

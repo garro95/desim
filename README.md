@@ -12,7 +12,7 @@ It is inspired by the Simpy environment for Python,
 but with the aim of being more efficient and to provide also a concurrent
 implementation.
 To achieve the same ease of use remaining light and efficient, it is based on
-the experimental _generators_ (coroutine) rust feature.
+the experimental _coroutines_ rust feature.
 
 You can read the [API documentation here](https://docs.rs/desim)
 
@@ -29,7 +29,7 @@ Moreover it offers getters to retrieve the current time and the ordered list of
 processed events and methods to process the next event in the simulation and to
 run all the events until a certain condition is verified.
 
-A process is a generator that yields a variant of the `Effect` enum.
+A process is a coroutine that yields a variant of the `Effect` enum.
 Using this type the process may interact with the simulation,
 for example scheduling events or requesting resources.
 
@@ -49,6 +49,7 @@ basis of a proprietary one. Improvements of this work or simulation software
 written using desim as a library should be free software as well.
 
 ## Changes
+* 0.4.0 Replace every occurrence of `generator` with `coroutine`
 * 0.3.0 Allow the definition of custom Resource types.  
    WARNING: contains breaking changes: 
    - `SimGen` has been renamed to `Process`

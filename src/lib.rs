@@ -14,9 +14,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
 //! This crate implements a discrete time event simulation framework
-//! inspired by the SimPy library for Python. It uses the generator
+//! inspired by the SimPy library for Python. It uses the coroutine
 //! feature that is nightly. Once the feature is stabilized, also this
-//! crate will use stable. Generators will be the only nightly feature
+//! crate will use stable. Coroutines will be the only nightly feature
 //! used in this crate.
 //!
 //! The examples directory in this repository contains full usage examples
@@ -42,7 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //!
 */
 //! # Process
-//! A process is implemented using the rust generators syntax.
+//! A process is implemented using the rust coroutines syntax.
 //! This let us avoid the overhead of spawning a new thread for each
 //! process, while still keeping the use of this framework quite simple.
 //!
@@ -51,8 +51,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! resumes the process.
 //!
 //! A process can be stopped and resumed later on. To stop the process, the
-//! generator yields an `Effect` that specify what the simulator should do.
-//! For example, a generator can set a timeout after which it is executed again.
+//! coroutine yields an `Effect` that specify what the simulator should do.
+//! For example, a coroutine can set a timeout after which it is executed again.
 //! The process may also return. In that case it can not be resumed anymore.
 //!
 //!
@@ -71,17 +71,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 //! For more information about the `Resource` trait and the `SimpleResource` implementation,
 //! see the [`resources`](crate::resources) module.
 
-#![feature(generators, generator_trait)]
+#![feature(coroutines, coroutine_trait)]
 use std::cmp::{Ordering, Reverse};
 use std::collections::BinaryHeap;
-use std::ops::{Generator, GeneratorState};
+use std::ops::{Coroutine, CoroutineState};
 use std::pin::Pin;
 
 pub mod prelude;
 pub mod resources;
 use resources::{Resource, Store};
 
-/// Data structures implementing this trait can be yielded from the generator
+/// Data structures implementing this trait can be yielded from the coroutine
 /// associated with a `Process`. This allows attaching application-specific data
 /// to `Effect`s. This data is then carried arround by the Simulation, passed
 /// into user callbacks for context or simply logged for later.
@@ -92,7 +92,7 @@ use resources::{Resource, Store};
 /// A process can then yield `ItemState` instead of `Effect` types:
 ///
 /// ```
-/// #![feature (generators, generator_trait)]
+/// #![feature (coroutines, coroutine_trait)]
 /// use desim::{Effect, SimState, Simulation};
 ///
 /// // enum used as part of state logged during simulation
@@ -136,7 +136,7 @@ pub trait SimState {
     fn should_log(&self) -> bool;
 }
 
-/// The effect is yelded by a process generator to
+/// The effect is yelded by a process coroutine to
 /// interact with the simulation environment.
 #[derive(Debug, Copy, Clone)]
 #[non_exhaustive]
@@ -171,8 +171,8 @@ pub type ProcessId = usize;
 pub type ResourceId = usize;
 /// Identifies a store. Can be used to push into and pull out of it.
 pub type StoreId = usize;
-/// The type of each `Process` generator
-pub type Process<T> = dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin;
+/// The type of each `Process` coroutine
+pub type Process<T> = dyn Coroutine<SimContext<T>, Yield = T, Return = ()> + Unpin;
 
 /// This struct provides the methods to create and run the simulation
 /// in a single thread.
@@ -193,7 +193,7 @@ pub struct Simulation<T: SimState + Clone> {
     future_events_buffer: Vec<Event<T>>,
 }
 
-/// The Simulation Context is the argument used to resume the generator.
+/// The Simulation Context is the argument used to resume the coroutine.
 /// It can be used to retrieve the simulation time and the effect that caused the process' wake up.
 #[derive(Debug, Clone)]
 pub struct SimContext<T> {
@@ -203,7 +203,7 @@ pub struct SimContext<T> {
 
 /*
 pub struct ParallelSimulation {
-    processes: Vec<Box<Generator<Yield = Effect, Return = ()>>>
+    processes: Vec<Box<Coroutine<Yield = Effect, Return = ()>>>
 }
  */
 
@@ -252,7 +252,7 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
     /// Returns the identifier of the process.
     pub fn create_process(
         &mut self,
-        process: Box<dyn Generator<SimContext<T>, Yield = T, Return = ()> + Unpin>,
+        process: Box<dyn Coroutine<SimContext<T>, Yield = T, Return = ()> + Unpin>,
     ) -> ProcessId {
         let id = self.processes.len();
         self.processes.push(Some(process));
@@ -318,14 +318,14 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
             // it becomes confusing if you first get a resource acquired event
             // and only log the request for it afterwards.
             match gstatepin.clone() {
-                GeneratorState::Yielded(y) => {
+                CoroutineState::Yielded(y) => {
                     self.log_processed_event(&event, y);
                 }
-                GeneratorState::Complete(_) => {}
+                CoroutineState::Complete(_) => {}
             }
             // process event
             match gstatepin {
-                GeneratorState::Yielded(y) => {
+                CoroutineState::Yielded(y) => {
                     let effect = y.get_effect();
                     match effect {
                         Effect::TimeOut(t) => self.future_events.push(Reverse(Event {
@@ -383,12 +383,12 @@ impl<T: 'static + SimState + Clone> Simulation<T> {
                         }
                     }
                 }
-                GeneratorState::Complete(_) => {
+                CoroutineState::Complete(_) => {
                     // FIXME: removing the process from the vector would invalidate
                     // all existing `ProcessId`s, but keeping it would be a
                     // waste of space since it is completed.
                     // May be worth to use another data structure.
-                    // At least let's remove the generator itself.
+                    // At least let's remove the coroutine itself.
                     self.processes[event.process()].take();
                 }
             }

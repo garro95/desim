@@ -8,10 +8,10 @@
 // using event loops.
 //
 // This example is also meant to show how you can develop an application-specific
-// API so that the code written inside the process generator is simple and can
+// API so that the code written inside the process coroutine is simple and can
 // be followed naturally using domain-specific notions.
 //
-#![feature(generators, generator_trait)]
+#![feature(coroutines, coroutine_trait)]
 use desim::prelude::*;
 use desim::resources::SimpleResource;
 use rand::rngs::SmallRng as Rng;

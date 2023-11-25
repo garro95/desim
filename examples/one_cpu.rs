@@ -5,7 +5,7 @@
 //! * Effects
 //! * EndCondition::Time
 //! * Simulation
-#![feature(generators, generator_trait)]
+#![feature(coroutines, coroutine_trait)]
 use rand::{rngs::SmallRng as Rng, RngCore as RngT, SeedableRng};
 
 use desim::resources::SimpleResource;

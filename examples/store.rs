@@ -5,7 +5,7 @@
 //! * Effects
 //! * EndCondition::NoEvents
 //! * Simulation
-#![feature(generators, generator_trait)]
+#![feature(coroutines, coroutine_trait)]
 
 use desim::resources::SimpleStore;
 use desim::{Effect, EndCondition, SimState, Simulation, StoreId};

@@ -1,6 +1,6 @@
 [package]
 name = "desim"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Gianmarco Garrisi <gianmarcogarrisi@tutanota.com>"]
 description = "A discrete-time events simulation framework inspired by Simpy"
 repository = "https://github.com/garro95/desim"

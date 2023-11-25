@@ -5,7 +5,7 @@
 //! * Simple Resource
 //! * prelude
 
-#![feature(generators, generator_trait)]
+#![feature(coroutines, coroutine_trait)]
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter, Result};
 
