@@ -157,28 +157,31 @@ impl PCBStateCtx {
 }
 
 fn process_code(r: Resources) -> Box<Process<PCBState>> {
-    Box::new(#[coroutine] move |_| {
-        let mut current_pcb_id = 0;
-        let mut ctx = PCBStateCtx::new(r);
-        loop {
-            // PCB first processing stage
-            yield ctx.need_pip();
-            yield ctx.pip_work();
-            yield ctx.free_pip(PCBStage::SurfaceMountPlaced);
-            // requeue PCB for second processing stage
-            yield ctx.need_pip();
-            yield ctx.pip_work();
-            yield ctx.free_pip(PCBStage::ThruHolePlaced);
-            // queue for electrical testing
-            yield ctx.need_et();
-            yield ctx.et_work();
-            yield ctx.free_et(PCBStage::ElectricalTestPerformed);
-            yield ctx.mark(PCBStage::Done);
+    Box::new(
+        #[coroutine]
+        move |_| {
+            let mut current_pcb_id = 0;
+            let mut ctx = PCBStateCtx::new(r);
+            loop {
+                // PCB first processing stage
+                yield ctx.need_pip();
+                yield ctx.pip_work();
+                yield ctx.free_pip(PCBStage::SurfaceMountPlaced);
+                // requeue PCB for second processing stage
+                yield ctx.need_pip();
+                yield ctx.pip_work();
+                yield ctx.free_pip(PCBStage::ThruHolePlaced);
+                // queue for electrical testing
+                yield ctx.need_et();
+                yield ctx.et_work();
+                yield ctx.free_et(PCBStage::ElectricalTestPerformed);
+                yield ctx.mark(PCBStage::Done);
 
-            current_pcb_id += 1;
-            ctx.set_new_id(current_pcb_id);
-        }
-    })
+                current_pcb_id += 1;
+                ctx.set_new_id(current_pcb_id);
+            }
+        },
+    )
 }
 
 fn main() {
