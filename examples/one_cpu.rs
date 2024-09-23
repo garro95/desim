@@ -14,7 +14,7 @@ use desim::{Effect, EndCondition, Simulation};
 fn main() {
     let mut s = Simulation::new();
     let cpu = s.create_resource(Box::new(SimpleResource::new(1)));
-    let p1 = s.create_process(Box::new(move |_| {
+    let p1 = s.create_process(Box::new(#[coroutine] move |_| {
         for _ in 0..10 {
             // wait for the cpu to be available
             yield Effect::Request(cpu);
@@ -24,7 +24,7 @@ fn main() {
             yield Effect::Release(cpu);
         }
     }));
-    let p2 = s.create_process(Box::new(move |_| {
+    let p2 = s.create_process(Box::new(#[coroutine] move |_| {
         let mut rng = Rng::from_entropy();
         loop {
             // wait for the CPU
