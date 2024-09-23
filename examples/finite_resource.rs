@@ -102,15 +102,18 @@ impl Resource<State> for FiniteQueue {
 }
 
 fn client_process(res: ResourceId) -> Box<Process<State>> {
-    Box::new(move |response: SimContext<State>| {
-        yield State::new(Effect::Request(res));
-        if !response.state().queue_full {
-            yield State::new(Effect::TimeOut(5.0));
-            yield State::new(Effect::Release(res));
-        } else {
-            yield State::new(Effect::Trace);
-        }
-    })
+    Box::new(
+        #[coroutine]
+        move |response: SimContext<State>| {
+            yield State::new(Effect::Request(res));
+            if !response.state().queue_full {
+                yield State::new(Effect::TimeOut(5.0));
+                yield State::new(Effect::Release(res));
+            } else {
+                yield State::new(Effect::Trace);
+            }
+        },
+    )
 }
 
 fn main() {
