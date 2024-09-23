@@ -117,7 +117,7 @@ use resources::{Resource, Store};
 /// }
 ///
 /// let mut sim = Simulation::new();
-/// sim.create_process(Box::new(move |_| {
+/// sim.create_process(Box::new(#[coroutine] move |_| {
 ///     yield ItemState { stage: StageType::FirstPass,
 ///                       effect: Effect::TimeOut(10.0),
 ///                       log: true,
@@ -530,7 +530,7 @@ mod tests {
         use crate::{Effect, Simulation};
 
         let mut s = Simulation::new();
-        let p = s.create_process(Box::new(|_| {
+        let p = s.create_process(Box::new(#[coroutine] |_| {
             let mut a = 0.0;
             loop {
                 a += 1.0;
@@ -553,7 +553,7 @@ mod tests {
         use crate::{Effect, EndCondition, Simulation};
 
         let mut s = Simulation::new();
-        let p = s.create_process(Box::new(|_| {
+        let p = s.create_process(Box::new(#[coroutine] |_| {
             let tik = 0.7;
             loop {
                 println!("tik");
@@ -575,13 +575,13 @@ mod tests {
         let r = s.create_resource(Box::new(SimpleResource::new(1)));
 
         // simple process that lock the resource for 7 time units
-        let p1 = s.create_process(Box::new(move |_| {
+        let p1 = s.create_process(Box::new(#[coroutine] move |_| {
             yield Effect::Request(r);
             yield Effect::TimeOut(7.0);
             yield Effect::Release(r);
         }));
         // simple process that holds the resource for 3 time units
-        let p2 = s.create_process(Box::new(move |_| {
+        let p2 = s.create_process(Box::new(#[coroutine] move |_| {
             yield Effect::Request(r);
             yield Effect::TimeOut(3.0);
             yield Effect::Release(r);
@@ -608,13 +608,13 @@ mod tests {
         let store = sim.create_store(Box::new(SimpleStore::new(1)));
 
         // simple process that pulls out of the store immediately and after 7 time units
-        let p1 = sim.create_process(Box::new(move |_| {
+        let p1 = sim.create_process(Box::new(#[coroutine] move |_| {
             yield Effect::Pull(store);
             yield Effect::TimeOut(7.0);
             yield Effect::Pull(store);
         }));
         // simple process that pushes into the store immediately and after 3 time units
-        let p2 = sim.create_process(Box::new(move |_| {
+        let p2 = sim.create_process(Box::new(#[coroutine] move |_| {
             yield Effect::Push(store);
             yield Effect::TimeOut(3.0);
             yield Effect::Push(store);

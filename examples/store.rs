@@ -44,7 +44,7 @@ impl SimState for MyState {
 fn main() {
     let mut s = Simulation::new();
     let queue = s.create_store(Box::new(SimpleStore::new(1)));
-    let p1 = s.create_process(Box::new(move |_| {
+    let p1 = s.create_process(Box::new(#[coroutine] move |_| {
         for i in 0..10 {
             // wait for the cpu to be available
             yield MyState::Push(queue, i);
@@ -53,7 +53,7 @@ fn main() {
             yield MyState::Wait(10.0);
         }
     }));
-    let p2 = s.create_process(Box::new(move |_| {
+    let p2 = s.create_process(Box::new(#[coroutine] move |_| {
         for _ in 0..10 {
             // wait for the CPU
             let ret = yield MyState::Pull(queue);

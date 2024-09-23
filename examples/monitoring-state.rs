@@ -157,7 +157,7 @@ impl PCBStateCtx {
 }
 
 fn process_code(r: Resources) -> Box<Process<PCBState>> {
-    Box::new(move |_| {
+    Box::new(#[coroutine] move |_| {
         let mut current_pcb_id = 0;
         let mut ctx = PCBStateCtx::new(r);
         loop {

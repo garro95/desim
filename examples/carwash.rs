@@ -72,7 +72,7 @@ fn car_process<'a>(
     // Generate random drive_time and wash_time at beginning
     let t_drive = distr_drive.sample(rng);
     let t_wash = distr_wash.sample(rng);
-    Box::new(move |_| {
+    Box::new(#[coroutine] move |_| {
         // The car drives for `t_drive` time
         yield Drive(t_drive);
         // Arrives at carwash and waits for a machine to be free
