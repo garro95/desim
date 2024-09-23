@@ -44,6 +44,7 @@ Feel free to contribute to this project with pull requests and/or issues.
 All contribution should be under a license compatible with the GNU GPLv3.
 
 > Why did you chose the GNU GPL instead of a more permissive license like Apache/MIT?
+
 Because I wrote a piece of free software and I don't want it to be used as the
 basis of a proprietary one. Improvements of this work or simulation software
 written using desim as a library should be free software as well.
